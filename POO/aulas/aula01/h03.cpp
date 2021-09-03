@@ -33,8 +33,8 @@ int main() {
   float p = proximaParcela();
   while (p > 0) {
     printf("O valor da parcela %d eh %3.2f \n", i, p);
-    p = proximaParcela();
     i++;
+    p = proximaParcela();
   }
   return 0;
 }
