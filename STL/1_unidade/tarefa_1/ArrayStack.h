@@ -37,6 +37,7 @@ template <class T> void ArrayStack<T>::clear() {
   n = 0;
   array<T> b(1);
   a = b;
+  
 }
 
 template <class T> ArrayStack<T>::ArrayStack() : a(1) { n = 0; }

@@ -1,4 +1,3 @@
-
 /*
  * ChainedHashTable.h
  *
@@ -13,10 +12,10 @@
 #include "utils.h"
 #include <climits>
 #include <cmath>
-
-#define ll long long int
+#include <cstddef>
 
 namespace ods {
+
 template <class T> class ChainedHashTable {
 protected:
   typedef ArrayStack<T> List;
@@ -25,20 +24,16 @@ protected:
   int n;
   int d;
   int z;
-  int m;
   static const int w = 32; // sizeof(int)*8;
-  void resize();
-  int hash(T x);
 
 public:
+  int hash(T x);
   ChainedHashTable(int m);
   virtual ~ChainedHashTable();
-  void setHashTable(int x) { d = x; };
-  int getHash(T x) { return hash(x); }
   bool add(T x);
   T remove(T x);
+  void check(int x);
   T find(T x);
-  ArrayStack<T> check(int x) { return t[x]; };
   int size() { return n; }
   void clear();
 };
@@ -46,18 +41,23 @@ public:
 /**
  * FIXME:  A copy-constructor for arrays would be useful here
  */
-
+template <class T> void ChainedHashTable<T>::check(int x) {
+  if (t[x].size() == 0)
+    std::cout << std::endl;
+  else {
+    for (size_t i = 0; i < t[x].size(); ++i)
+      std::cout << t[x].get(i) << " ";
+    std::cout << std::endl;
+  }
+}
 template <class T> int ChainedHashTable<T>::hash(T x) {
-  ll sum = 0, p = 1000000007;
-
-  for (int i = 0; i < (int)x.size(); i++)
-    sum += (int)x[i] * pow(263, i);
-
+  long long int p = 1000000007, sum = 0;
+  for (int i = 0; i < (int)x.size(); ++i)
+    sum += (int)x[i] * std::pow(263, i);
   sum %= p;
   sum %= d;
   return sum;
 }
-
 template <class T> ChainedHashTable<T>::ChainedHashTable(int m) : t(m) {
   n = 0;
   d = m;
