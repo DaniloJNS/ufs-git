@@ -8,7 +8,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type Lista struct {
@@ -45,8 +44,6 @@ type Sistema_de_impressao struct {
 	documentos  Pilha
 	impressoes  int
 }
-
-var messages []string
 
 // ******* Interface para fila de documentos ******* {{
 func (fila *Fila) add(element Documento) {
@@ -120,7 +117,7 @@ func (pilha *Pilha) pop() (element Documento) {
 	a imprimir é a que tem menos impressões
 	impressora. documentos < ...Impressooras
 */
-func (sistema_de_impressao *Sistema_de_impressao) imprimir(documento Documento) {
+func (sistema_de_impressao *Sistema_de_impressao) imprimir(documento Documento) string {
 	proxima := &Impressora{nome: "", impressoes: 999999}
 
 	for i := 0; i < len((*sistema_de_impressao).impressoras); i++ {
@@ -134,7 +131,7 @@ func (sistema_de_impressao *Sistema_de_impressao) imprimir(documento Documento) 
 	}
 	sistema_de_impressao.impressoes += documento.paginas
 	proxima.imprimmir(documento)
-	proxima.show()
+	return proxima.show()
 }
 
 func (impressora *Impressora) imprimmir(documento Documento) {
@@ -142,8 +139,8 @@ func (impressora *Impressora) imprimmir(documento Documento) {
 	impressora.impressoes += documento.paginas
 }
 
-func (impressora Impressora) show() {
-	var show string = fmt.Sprintf("[%s] ", impressora.nome)
+func (impressora Impressora) show() (show string) {
+	show = fmt.Sprintf("[%s] ", impressora.nome)
 	current := impressora.documentos.head
 	for current != nil {
 		if current.next != nil {
@@ -153,17 +150,7 @@ func (impressora Impressora) show() {
 		}
 		current = current.next
 	}
-	messages = append(messages, show)
-}
-
-func (sistema_de_impressao Sistema_de_impressao) show() {
-	messages = append(messages, fmt.Sprintf("%dp", sistema_de_impressao.impressoes))
-	current := sistema_de_impressao.documentos.head
-	for current != nil {
-		show := fmt.Sprintf("%s -%dp", current.element.nome, current.element.paginas)
-		messages = append(messages, show)
-		current = current.next
-	}
+	return
 }
 
 func read_file(file_name string) ([]string, error) {
@@ -185,20 +172,10 @@ func read_file(file_name string) ([]string, error) {
 	return linhas, scanner.Err()
 }
 
-func write_file(file_name string) error {
-	file, err := os.Open(file_name)
-
-	if err != nil {
-		log.Panic(err.Error())
-	}
-
-	buffer := bufio.NewWriter(file)
-
-	for _, message := range messages {
-		fmt.Fprintf(buffer, message)
-	}
-
-	return buffer.Flush()
+func write_file(file *os.File, message string) {
+	file.Seek(0, 2)
+	file.WriteString(fmt.Sprintln(message))
+	file.Sync()
 }
 
 func raise(err error) {
@@ -208,14 +185,15 @@ func raise(err error) {
 }
 
 func main() {
-	start := time.Now()
 	var sistema_de_impressao Sistema_de_impressao
 
 	input, err := read_file(os.Args[1])
-	file, err_2 := os.Create(os.Args[2])
+	output_file, err_2 := os.OpenFile(os.Args[2], os.O_RDWR, 0644)
 
 	raise(err)
 	raise(err_2)
+
+	defer output_file.Close()
 
 	n_impressoras, err := strconv.Atoi(input[0])
 	documentos := input[n_impressoras+2:]
@@ -236,32 +214,21 @@ func main() {
 		nome := dados[0]
 		paginas, err := strconv.Atoi(dados[1])
 		raise(err)
-		sistema_de_impressao.imprimir(Documento{nome: nome, paginas: paginas})
+		write_file(output_file, sistema_de_impressao.imprimir(Documento{nome: nome, paginas: paginas}))
 	}
 
 	for _, impressora := range sistema_de_impressao.impressoras {
-		sistema_de_impressao.documentos.add(impressora.documentos.head.element)
+		if impressora.documentos.head != nil {
+			sistema_de_impressao.documentos.add(impressora.documentos.head.element)
+		}
 	}
 
-	sistema_de_impressao.show()
+	write_file(output_file, fmt.Sprintf("%dp", sistema_de_impressao.impressoes))
 
-	buffer := bufio.NewWriter(file)
+	current := sistema_de_impressao.documentos.head
 
-	for _, message := range messages {
-		fmt.Fprintln(buffer, message)
+	for current != nil {
+		write_file(output_file, fmt.Sprintf("%s -%dp", current.element.nome, current.element.paginas))
+		current = current.next
 	}
-
-	buffer.Flush()
-
-	duration := time.Since(start)
-	// Formatted string, such as "2h3m0.5s" or "4.503μs"
-	fmt.Println(duration)
-
-	// Nanoseconds as int64
-	fmt.Println(duration.Nanoseconds())
-	// for _, impressora := range impressoras {
-	// 	for _, documento := range impressora.documentos {
-	// 		fmt.Println(impressora.nome, " ", impressora.impressoes, " ", documento.nome)
-	// 	}
-	// }
 }
