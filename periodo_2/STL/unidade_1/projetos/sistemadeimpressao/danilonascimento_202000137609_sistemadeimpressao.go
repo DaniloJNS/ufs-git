@@ -8,11 +8,11 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Lista struct {
 	element Documento
-
 	next *Lista
 }
 
@@ -108,13 +108,12 @@ func (pilha *Pilha) pop() (element Documento) {
 	}
 	return
 }
-
 // }}
 /*
 	O tempo para imprimir as paginas dos documentos são contantes
 	com isso, é definido qual impressora realizara a impressão com base
 	na quatidade paginas que elas ja imprimiu, logo a proxima impressora
-	a imprimir é a que tem menos impressões
+	a imprimir é a que tiver menos impressões
 	impressora. documentos < ...Impressooras
 */
 func (sistema_de_impressao *Sistema_de_impressao) imprimir(documento Documento) string {
@@ -144,9 +143,9 @@ func (impressora Impressora) show() (show string) {
 	current := impressora.documentos.head
 	for current != nil {
 		if current.next != nil {
-			show += fmt.Sprintf("%s -%dp, ", current.element.nome, current.element.paginas)
+			show += fmt.Sprintf("%s-%dp, ", current.element.nome, current.element.paginas)
 		} else {
-			show += fmt.Sprintf("%s -%dp", current.element.nome, current.element.paginas)
+			show += fmt.Sprintf("%s-%dp", current.element.nome, current.element.paginas)
 		}
 		current = current.next
 	}
@@ -178,6 +177,12 @@ func write_file(file *os.File, message string) {
 	file.Sync()
 }
 
+func async_write_file(file *os.File, message string) {
+	file.Seek(0, 2)
+	file.WriteString(fmt.Sprintln(message))
+	go file.Sync()
+}
+
 func raise(err error) {
 	if err != nil {
 		log.Panic(err.Error())
@@ -185,6 +190,7 @@ func raise(err error) {
 }
 
 func main() {
+	start := time.Now()
 	var sistema_de_impressao Sistema_de_impressao
 
 	input, err := read_file(os.Args[1])
@@ -200,21 +206,27 @@ func main() {
 
 	// Armazenando as impressoras disponiveis
 	for _, value := range input[1 : n_impressoras+1] {
-		impressora := Impressora{
-			nome:       value,
-			documentos: Pilha{},
-			impressoes: 0,
-		}
-		sistema_de_impressao.impressoras = append(sistema_de_impressao.impressoras, impressora)
+	sistema_de_impressao.impressoras = append(
+		sistema_de_impressao.impressoras, Impressora{
+											nome:       value,
+											documentos: Pilha{},
+											impressoes: 0,
+		})
 	}
+
+	var dados []string
+	var nome string
+	var paginas int
 
 	// Enfililerando todos os documentos
 	for _, documento := range documentos {
-		dados := strings.SplitN(documento, " ", 2)
-		nome := dados[0]
-		paginas, err := strconv.Atoi(dados[1])
-		raise(err)
-		write_file(output_file, sistema_de_impressao.imprimir(Documento{nome: nome, paginas: paginas}))
+		dados = strings.SplitN(documento, " ", 2)
+		if len(dados) == 2 {
+			nome = dados[0]
+			paginas, err = strconv.Atoi(dados[1])
+			raise(err)
+			async_write_file(output_file, sistema_de_impressao.imprimir(Documento{nome: nome, paginas: paginas}))
+		}
 	}
 
 	for _, impressora := range sistema_de_impressao.impressoras {
@@ -223,12 +235,14 @@ func main() {
 		}
 	}
 
-	write_file(output_file, fmt.Sprintf("%dp", sistema_de_impressao.impressoes))
+	async_write_file(output_file, fmt.Sprintf("%dp", sistema_de_impressao.impressoes))
 
 	current := sistema_de_impressao.documentos.head
 
 	for current != nil {
-		write_file(output_file, fmt.Sprintf("%s -%dp", current.element.nome, current.element.paginas))
+		async_write_file(output_file, fmt.Sprintf("%s-%dp", current.element.nome, current.element.paginas))
 		current = current.next
 	}
+	
+	fmt.Println("Time exec: ", time.Since(start))
 }
