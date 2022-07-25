@@ -1,0 +1,17 @@
+FORMATO U (OP,Z,X,Y,L)
+
+6 bits para operação (OP)
+5 bits para operandos(Z, X ,Y)
+11 BITS para uso livre
+
+FORMATO F (OP,Z,X,I16)
+
+6 bits para operação (OP)
+5 bits para operando (Z,X)
+16 bits para imediato(I16)
+
+FORMATO S (OP, I26)
+
+6 bits para operação (OP)
+26 bits para imediato (I26)
+
