@@ -249,6 +249,11 @@ func (add *Add) Execute() {
 
     if carry == 1 { SR.CY() }
 
+    if (*add.RX >> 31) == (*add.RY >> 31) &&
+    (*add.RZ >> 31) != (*add.RX) {
+	SR.OV()
+    }
+
     // TODO: Implement overflow
 }
 

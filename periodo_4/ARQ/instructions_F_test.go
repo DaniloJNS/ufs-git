@@ -187,5 +187,51 @@ var _ = Describe("InstructionsF", func() {
 				})
 			})
 		})
+
+		When("Result has overflow with signal", func() {
+			BeforeEach(func() {
+				main.R[1] = 0x7FFFFFFF
+				main.R[2] = 0x7FFFFFFF
+			})
+			Context("#Execute", func() {
+				It("Should be diferent zero", func() {
+					Expect(main.SR.Data).To(Equal(uint32(0x00000018)))
+					Expect(main.R[add.Z()]).To(Equal(uint32(0xFFFFFFFE)))
+				})
+			})
+			
+			Context("#Print", func() {
+				It("Should view return instruction with SN in SR toggle", func() {
+					add.Print()
+					w.Close()
+					message, _ := ioutil.ReadAll(r)
+
+					Expect(string(message)).To(Equal("0x00000008:\tadd r3,r1,r2             \tR3=R1+R2=0xFFFFFFFE,SR=0x00000018\n"))
+				})
+			})
+		})
+
+		When("Result has overflow with carry and signal", func() {
+			BeforeEach(func() {
+				main.R[1] = 0xFFFFFFFF
+				main.R[2] = 0xFFFFFFFF
+			})
+			Context("#Execute", func() {
+				It("Should be diferent zero", func() {
+					Expect(main.SR.Data).To(Equal(uint32(0x00000019)))
+					Expect(main.R[add.Z()]).To(Equal(uint32(0xFFFFFFFE)))
+				})
+			})
+			
+			Context("#Print", func() {
+				It("Should view return instruction with SN in SR toggle", func() {
+					add.Print()
+					w.Close()
+					message, _ := ioutil.ReadAll(r)
+
+					Expect(string(message)).To(Equal("0x00000008:\tadd r3,r1,r2             \tR3=R1+R2=0xFFFFFFFE,SR=0x00000019\n"))
+				})
+			})
+		})
 	})
 })
