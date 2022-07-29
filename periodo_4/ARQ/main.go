@@ -271,7 +271,7 @@ type Sub struct { InstructionFormatU }
 func (sub *Sub) Execute() {
     var carry uint32
 
-    *sub.RZ, carry = bits.Add32(*sub.RX, *sub.RY, 0)
+    *sub.RZ, carry = bits.Sub32(*sub.RX, *sub.RY, 0)
 
     if *sub.RZ == 0 { SR.ZN() }
 
