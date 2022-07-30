@@ -1,0 +1,10 @@
+ #Complilação metadados
+ arm-none-eabi-as -mcpu=cortex-m3 -mthumb -g start.s -o start.O
+ #Compilação código
+ arm-none-eabi-gcc -Wall -Os -mcpu=cortex-m3 -mthumb -g -nostdlib -nostartfiles -c blink.c -o blink.O
+ #Gerando elf
+ arm-none-eabi-gcc -Wall -Os -mcpu=cortex-m3 -mthumb -g -nostdlib -nostartfiles -T stm32f103c8.ld start.o blink.o -o blink.elf
+ #Gerando binario
+ arm-none-eabi-objcopy -O binary blink.elf blink.bin
+ #Input in hardware
+ st-flash write blink.bin 0x8000000   

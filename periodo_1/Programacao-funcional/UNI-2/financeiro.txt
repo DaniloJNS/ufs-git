@@ -1,0 +1,6 @@
+// Percentual de um valor
+//Aumento Percentual
+desconto Percentual
+marge de venda
+variação Percentual
+relação percentual entre dois valores
