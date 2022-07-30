@@ -58,6 +58,7 @@ const (
      X         = uint32(0x001F0000)
      Y         = uint32(0x0000F800)
      L         = uint32(0x000007FF)
+     I5        = uint32(0x0000001F)
      I11       = uint32(0x0000FFFF)
      I16       = uint32(0x07FFFFFF)
 
@@ -159,6 +160,10 @@ func (instruction Instruction) L() uint32 {
     return (IR.Data & L)
 }
 
+func (instruction Instruction) I5() uint32 {
+    return (IR.Data & I5)
+}
+
 func (instruction Instruction) I11() uint32 {
     return (IR.Data & I11)
 }
@@ -177,6 +182,19 @@ func (instruction *InstructionFormatU) New() {
     instruction.RZ = &R[instruction.Z()]
     instruction.RX = &R[instruction.X()]
     instruction.RY = &R[instruction.Y()]
+}
+
+type InstructionFormatUforTwoRegisters struct {
+    InstructionFormatU
+
+    RI *uint32
+}
+
+func (instruction *InstructionFormatUforTwoRegisters) New() {
+    instruction.RZ = &R[instruction.Z()]
+    instruction.RX = &R[instruction.X()]
+    instruction.RY = &R[instruction.Y()]
+    instruction.RI = &R[instruction.I11() & uint32(0x1F)]
 }
 
 type InstructionFormatF struct {
@@ -224,7 +242,7 @@ func (movs Movs) signal() uint32 {
     if (movs.X() >> 4) == uint32(0x1) {
        return uint32(0xFFE00000)
     } else {
-       return uint32(0)
+       return uint32(0x0)
     }
 }
 
@@ -253,8 +271,6 @@ func (add *Add) Execute() {
     (*add.RZ >> 31) != (*add.RX) {
 	SR.OV()
     }
-
-    // TODO: Implement overflow
 }
 
 func(add * Add) Print() {
@@ -279,7 +295,10 @@ func (sub *Sub) Execute() {
 
     if carry == 1 { SR.CY() }
 
-    // TODO: Implement overflow
+    if (*sub.RX >> 31) != (*sub.RY >> 31) &&
+    (*sub.RZ >> 31) != (*sub.RX) {
+	SR.OV()
+    }
 }
 
 func(sub * Sub) Print() {
@@ -288,6 +307,25 @@ func(sub * Sub) Print() {
 
     write(code, execution)
 }
+
+type Mul struct { InstructionFormatUforTwoRegisters }
+
+// R[I] : R[z] = R[x] * R[y]
+func (mul *Mul) Execute() {
+    *mul.RZ, *mul.RI = bits.Mul32(*mul.RX, *mul.RY)
+
+    if *mul.RZ == 0 && *mul.RI == 0{ SR.ZN() }
+
+    if (*mul.RI) != 1 { SR.CY() }
+}
+
+func(mul * Mul) Print() {
+    execution := fmt.Sprintf("R%d:R%d=R%d+R%d=0x%08X%08X,SR=0x%08X",mul.I5(), mul.Z(), mul.X(), mul.Y(), *mul.RI, *mul.RZ, SR.Data)
+    code := fmt.Sprintf("mul r%d,r%d,r%d,r%d", mul.I5(),  mul.Z(), mul.X(), mul.Y())
+
+    write(code, execution)
+}
+
 // Store 32 bits from memory
 func Store32(address uint32 , Data uint32) {
     address *= 2
@@ -381,9 +419,9 @@ func main() {
     fmt.Println("[START OF SIMULATION]");
     // print_sum()
 
-    add := Add{}
-    R[1] = 0x00123456
-    R[2] = 0xFFF00000
+    add := Sub{}
+    R[2] = 0xFFFF0000
+    R[1] = 0x00012345
     IR.Data = uint32(0x08611000)
     add.New()
     add.Execute()
