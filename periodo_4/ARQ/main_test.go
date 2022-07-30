@@ -123,7 +123,7 @@ var _ = Describe("Main", func() {
 				It("#I11", func() {
 					main.IR.Data = uint32(0x2AFFFFF)
 
-					Expect(instruction.I11()).To(Equal(uint32(0xFFFF)))
+					Expect(instruction.I11()).To(Equal(uint32(0x7FF)))
 				})
 
 				It("#I16", func() {

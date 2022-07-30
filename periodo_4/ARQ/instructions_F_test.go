@@ -234,6 +234,7 @@ var _ = Describe("InstructionsF", func() {
 			})
 		})
 	})
+
 	Describe("Sub", func() {
 		var sub main.Sub
 
@@ -246,6 +247,28 @@ var _ = Describe("InstructionsF", func() {
 
 		AfterEach(func() {
 			main.SR.Data = uint32(0)
+		})
+
+		When("Result is zero", func() {
+			BeforeEach(func() {
+				main.R[1] = 0
+				main.R[2] = 0
+			})
+			Context("#Execute", func() {
+				It("Should be equal zero", func() {
+					Expect(main.SR.Data).To(Equal(uint32(0x00000040)))
+					Expect(main.R[sub.Z()]).To(Equal(uint32(0x0)))
+				})
+			})
+			
+			Context("#Print", func() {
+				It("Should view return instruction with ZN in SR toggle", func() {
+					sub.Print()
+					w.Close()
+					message, _ := ioutil.ReadAll(r)
+					Expect(string(message)).To(Equal("0x00000008:\tsub r3,r1,r2             \tR3=R1+R2=0x00000000,SR=0x00000040\n"))
+				})
+			})
 		})
 
 		When("Result has overflow", func() {
@@ -293,6 +316,100 @@ var _ = Describe("InstructionsF", func() {
 					message, _ := ioutil.ReadAll(r)
 
 					Expect(string(message)).To(Equal("0x00000008:\tsub r3,r1,r2             \tR3=R1+R2=0xFFFFFFFD,SR=0x00000018\n"))
+				})
+			})
+		})
+	})
+
+	Describe("Mul", func() {
+		var mul main.Mul
+
+		JustBeforeEach(func() {
+			main.PC = 0x00000008
+			// OP = 000100
+			// Z = 00111
+			// I = 00011
+			// X = 00001
+			// X = 00010
+			main.IR.Data = uint32(0x10E11003)
+			mul.New()
+			mul.Execute()
+		})
+
+		AfterEach(func() {
+			main.SR.Data = uint32(0)
+		})
+
+		When("Result is zero", func() {
+			BeforeEach(func() {
+				main.R[1] = 0
+				main.R[2] = 0x5
+			})
+			Context("#Execute", func() {
+				It("Should be equal zero", func() {
+					Expect(main.SR.Data).To(Equal(uint32(0x00000040)))
+					Expect(main.R[mul.Z()]).To(Equal(uint32(0x0)))
+					Expect(main.R[mul.I5()]).To(Equal(uint32(0x0)))
+				})
+			})
+			
+			Context("#Print", func() {
+				It("Should view return instruction with ZN in SR toggle", func() {
+					mul.Print()
+					w.Close()
+					message, _ := ioutil.ReadAll(r)
+					Expect(string(message)).To(Equal("0x00000008:\tmul r3,r7,r1,r2          \tR3:R7=R1*R2=0x0000000000000000,SR=0x00000040\n"))
+				})
+			})
+		})
+
+		When("Result has not status", func() {
+			BeforeEach(func() {
+					main.R[1] = 0x00000010
+					main.R[2] = 0x00000010
+			})
+
+			Context("#Execute", func() {
+				// 0x00012345 − 0xFFFF0000 = −FFFDDCBB
+				// !(-FFFDDCBB) + 1 = 22345
+				It("Should be diferent zero", func() {
+					Expect(main.SR.Data).To(Equal(uint32(0x00000000)))
+					Expect(main.R[mul.Z()]).To(Equal(uint32(0x00000100)))
+					Expect(main.R[mul.I5()]).To(Equal(uint32(0x00000000)))
+				})
+			})
+			
+			Context("#Print", func() {
+				It("Should view return instruction with ZN in SR toggle", func() {
+					mul.Print()
+					w.Close()
+					message, _ := ioutil.ReadAll(r)
+
+					Expect(string(message)).To(Equal("0x00000008:\tmul r3,r7,r1,r2          \tR3:R7=R1*R2=0x0000000000000100,SR=0x00000000\n"))
+				})
+			})
+		})
+
+		When("Result has carry", func() {
+			BeforeEach(func() {
+				main.R[1] = 0xFFFFFFFE
+				main.R[2] = 0x00000011
+			})
+			Context("#Execute", func() {
+				It("Should be diferent zero", func() {
+					Expect(main.SR.Data).To(Equal(uint32(0x00000001)))
+					Expect(main.R[mul.Z()]).To(Equal(uint32(0xFFFFFFDE)))
+					Expect(main.R[mul.I5()]).To(Equal(uint32(0x000000010)))
+				})
+			})
+			
+			Context("#Print", func() {
+				It("Should view return instruction with SN in SR toggle", func() {
+					mul.Print()
+					w.Close()
+					message, _ := ioutil.ReadAll(r)
+
+					Expect(string(message)).To(Equal("0x00000008:\tmul r3,r7,r1,r2          \tR3:R7=R1*R2=0x00000010FFFFFFDE,SR=0x00000001\n"))
 				})
 			})
 		})

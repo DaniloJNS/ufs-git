@@ -59,7 +59,7 @@ const (
      Y         = uint32(0x0000F800)
      L         = uint32(0x000007FF)
      I5        = uint32(0x0000001F)
-     I11       = uint32(0x0000FFFF)
+     I11       = uint32(0x000007FF)
      I16       = uint32(0x07FFFFFF)
 
      DeslocOP  = uint32(26)
@@ -312,15 +312,15 @@ type Mul struct { InstructionFormatUforTwoRegisters }
 
 // R[I] : R[z] = R[x] * R[y]
 func (mul *Mul) Execute() {
-    *mul.RZ, *mul.RI = bits.Mul32(*mul.RX, *mul.RY)
+    *mul.RI, *mul.RZ = bits.Mul32(*mul.RX, *mul.RY)
 
     if *mul.RZ == 0 && *mul.RI == 0{ SR.ZN() }
 
-    if (*mul.RI) != 1 { SR.CY() }
+    if (*mul.RI) != 0 { SR.CY() }
 }
 
 func(mul * Mul) Print() {
-    execution := fmt.Sprintf("R%d:R%d=R%d+R%d=0x%08X%08X,SR=0x%08X",mul.I5(), mul.Z(), mul.X(), mul.Y(), *mul.RI, *mul.RZ, SR.Data)
+    execution := fmt.Sprintf("R%d:R%d=R%d*R%d=0x%08X%08X,SR=0x%08X",mul.I5(), mul.Z(), mul.X(), mul.Y(), *mul.RI, *mul.RZ, SR.Data)
     code := fmt.Sprintf("mul r%d,r%d,r%d,r%d", mul.I5(),  mul.Z(), mul.X(), mul.Y())
 
     write(code, execution)
