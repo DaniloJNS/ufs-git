@@ -194,7 +194,7 @@ func (instruction *InstructionFormatUforTwoRegisters) New() {
     instruction.RZ = &R[instruction.Z()]
     instruction.RX = &R[instruction.X()]
     instruction.RY = &R[instruction.Y()]
-    instruction.RI = &R[instruction.I11() & uint32(0x1F)]
+    instruction.RI = &R[instruction.I5()]
 }
 
 type InstructionFormatF struct {
@@ -339,7 +339,7 @@ func (sll *Sll) Execute() {
 }
 
 func (sll *Sll) sll32() (uint32, uint32) {
-    tmp := (uint64(*sll.RZ) << 32) + uint64(*sll.RY)
+    tmp := uint64(*sll.RZ) << 32 | uint64(*sll.RY)
     
     tmp <<= uint64(sll.I5())
     
@@ -349,6 +349,75 @@ func (sll *Sll) sll32() (uint32, uint32) {
 func(sll * Sll) Print() {
     execution := fmt.Sprintf("R%d:R%d=R%d:R%d<<%d=0x%08X%08X,SR=0x%08X",sll.Z(), sll.X(), sll.Z(), sll.Y(), sll.I5(), *sll.RZ, *sll.RX, SR.Data)
     code := fmt.Sprintf("sll r%d,r%d,r%d,%d", sll.Z(), sll.X(), sll.Y(), sll.I5())
+
+    write(code, execution)
+}
+
+type Muls struct { InstructionFormatUforTwoRegisters }
+
+// R[I] : R[z] = R[x] * R[y]
+func (mul *Muls) Execute() {
+    *mul.RI, *mul.RZ = bits.Mul32(*mul.RX, *mul.RY)
+
+    if *mul.RZ == 0 && *mul.RI == 0{ SR.ZN() }
+
+    if (*mul.RI) != 0 { SR.CY() }
+}
+
+func(mul * Muls) Print() {
+    execution := fmt.Sprintf("R%d:R%d=R%d*R%d=0x%08X%08X,SR=0x%08X",mul.I5(), mul.Z(), mul.X(), mul.Y(), *mul.RI, *mul.RZ, SR.Data)
+    code := fmt.Sprintf("muls r%d,r%d,r%d,r%d", mul.I5(),  mul.Z(), mul.X(), mul.Y())
+
+    write(code, execution)
+}
+
+type Sla struct { InstructionFormatUforTwoRegisters }
+
+// R[I] : R[z] = R[x] * R[y]
+func (sla *Sla) Execute() {
+    *sla.RZ, *sla.RX = sla.sla32()
+
+    if *sla.RZ == 0 && *sla.RX == 0{ SR.ZN() }
+
+    if (*sla.RZ) != 0 { SR.CY() }
+}
+
+func (sla *Sla) sla32() (uint32, uint32) {
+    tmp := uint64(*sla.RZ) << 32 | uint64(*sla.RY)
+    
+    tmp <<= uint64(sla.I5())
+    
+    return uint32(tmp >> 32), uint32(tmp)
+}
+
+func(sla * Sla) Print() {
+    execution := fmt.Sprintf("R%d:R%d=R%d:R%d<<%d=0x%08X%08X,SR=0x%08X",sla.Z(), sla.X(), sla.Z(), sla.Y(), sla.I5(), *sla.RZ, *sla.RX, SR.Data)
+    code := fmt.Sprintf("sla r%d,r%d,r%d,%d", sla.Z(), sla.X(), sla.Y(), sla.I5())
+
+    write(code, execution)
+}
+
+type Div struct { InstructionFormatUforTwoRegisters }
+
+// R[I] : R[z] = R[x] * R[y]
+func (div *Div) Execute() {
+    if *div.RY != uint32(0) {
+	*div.RI, *div.RZ = *div.RX % *div.RY, *div.RX / *div.RY
+    } else {
+	*div.RI, *div.RZ = uint32(0x0), uint32(0x0)
+    }
+
+    if *div.RZ == 0 { SR.ZN() }
+
+    if *div.RY == 0 { SR.ZD() }
+
+    if (*div.RI) != 0 { SR.CY() }
+}
+
+func(div * Div) Print() {
+    execution := fmt.Sprintf("R%d=R%d%%R%d=0x%08X,R%d=R%d/R%d=0x%08X,SR=0x%08X",
+			      div.I5(), div.X(), div.Y(), *div.RI, div.Z(), div.X(), div.Y(), *div.RZ, SR.Data)
+    code := fmt.Sprintf("div r%d,r%d,r%d,r%d", div.I5(),  div.Z(), div.X(), div.Y())
 
     write(code, execution)
 }
