@@ -326,6 +326,33 @@ func(mul * Mul) Print() {
     write(code, execution)
 }
 
+
+type Sll struct { InstructionFormatUforTwoRegisters }
+
+// R[I] : R[z] = R[x] * R[y]
+func (sll *Sll) Execute() {
+    *sll.RZ, *sll.RX = sll.sll32()
+
+    if *sll.RZ == 0 && *sll.RX == 0{ SR.ZN() }
+
+    if (*sll.RZ) != 0 { SR.CY() }
+}
+
+func (sll *Sll) sll32() (uint32, uint32) {
+    tmp := (uint64(*sll.RZ) << 32) + uint64(*sll.RY)
+    
+    tmp <<= uint64(sll.I5())
+    
+    return uint32(tmp >> 32), uint32(tmp)
+}
+
+func(sll * Sll) Print() {
+    execution := fmt.Sprintf("R%d:R%d=R%d:R%d<<%d=0x%08X%08X,SR=0x%08X",sll.Z(), sll.X(), sll.Z(), sll.Y(), sll.I5(), *sll.RZ, *sll.RX, SR.Data)
+    code := fmt.Sprintf("sll r%d,r%d,r%d,%d", sll.Z(), sll.X(), sll.Y(), sll.I5())
+
+    write(code, execution)
+}
+
 // Store 32 bits from memory
 func Store32(address uint32 , Data uint32) {
     address *= 2
@@ -419,10 +446,11 @@ func main() {
     fmt.Println("[START OF SIMULATION]");
     // print_sum()
 
-    add := Sub{}
-    R[2] = 0xFFFF0000
-    R[1] = 0x00012345
-    IR.Data = uint32(0x08611000)
+    add := Sll{}
+    R[1] = 0x00000000
+    R[2] = 0x00000001
+    R[7] = 0
+    IR.Data = uint32(0x10E11103)
     add.New()
     add.Execute()
     add.Print()
