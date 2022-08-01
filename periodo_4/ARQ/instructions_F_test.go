@@ -18,6 +18,7 @@ var _ = Describe("InstructionsF", func() {
 	BeforeEach(func() {
 		stdout = os.Stdout
 		os.Stdout = w
+		main.Setup_registers()
 	})
 
 	AfterEach(func() {
@@ -29,15 +30,15 @@ var _ = Describe("InstructionsF", func() {
 		var mov main.Mov
 
 		JustBeforeEach(func() {
-			main.PC = 0x00000008
-			main.IR.Data = uint32(0x336AC9D)
+			main.PC.Set(0x00000008) 
+			main.IR.Set(0x336AC9D)
 			mov.New()
 			mov.Execute()
 		})
 
 		Context("#Execute", func() {
 			It("should write value in RZ", func() {
-				Expect(main.R[mov.Z()]).To(Equal(uint32(0x0016AC9D)))
+				Expect(main.R[mov.Z()].Get()).To(Equal(uint32(0x0016AC9D)))
 			})
 		})
 		
@@ -57,15 +58,15 @@ var _ = Describe("InstructionsF", func() {
 
 		When("number is negative", func() {
 			JustBeforeEach(func() {
-				main.PC = 0x00000008
-				main.IR.Data = uint32(0x336AC9D)
+				main.PC.Set(0x00000008) 
+				main.IR.Set(0x336AC9D)
 				mov.New()
 				mov.Execute()
 			})
 
 			Context("#Execute", func() {
 				It("should write value in RZ wtih signal", func() {
-					Expect(main.R[mov.Z()]).To(Equal(uint32(0xFFF6AC9D)))
+					Expect(main.R[mov.Z()].Get()).To(Equal(uint32(0xFFF6AC9D)))
 				})
 			})
 			
@@ -82,15 +83,16 @@ var _ = Describe("InstructionsF", func() {
 
 		When("number is positive", func() {
 			JustBeforeEach(func() {
-				main.PC = 0x00000008
-				main.IR.Data = uint32(0x326AC9D)
+				main.PC.Set(0x00000008) 
+				main.IR.Set(0x326AC9D)
 				mov.New()
+				main.R[mov.Z()].Set(0x0)
 				mov.Execute()
 			})
 
 			Context("#Execute", func() {
 				It("should write value in RZ wtih signal", func() {
-					Expect(main.R[mov.Z()]).To(Equal(uint32(0x0006AC9D)))
+					Expect(main.R[mov.Z()].Get()).To(Equal(uint32(0x0006AC9D)))
 				})
 			})
 			
@@ -110,25 +112,25 @@ var _ = Describe("InstructionsF", func() {
 		var add main.Add
 
 		JustBeforeEach(func() {
-			main.PC = 0x00000008
-			main.IR.Data = uint32(0x08611000)
+			main.PC.Set(0x00000008)
+			main.IR.Set(uint32(0x08611000))
 			add.New()
 			add.Execute()
 		})
 
 		AfterEach(func() {
-			main.SR.Data = uint32(0)
+			main.SR.Set(uint32(0)) 
 		})
 
 		When("Result is zero", func() {
 			BeforeEach(func() {
-				main.R[1] = 0
-				main.R[2] = 0
+				main.R[1].Set(0)
+				main.R[2].Set(0)
 			})
 			Context("#Execute", func() {
 				It("Should be equal zero", func() {
-					Expect(main.SR.Data).To(Equal(uint32(0x00000040)))
-					Expect(main.R[add.Z()]).To(Equal(uint32(0x0)))
+					Expect(main.SR.Get()).To(Equal(uint32(0x00000040)))
+					Expect(main.R[add.Z()].Get()).To(Equal(uint32(0x0)))
 				})
 			})
 			
@@ -144,13 +146,14 @@ var _ = Describe("InstructionsF", func() {
 
 		When("Result has carry", func() {
 			BeforeEach(func() {
-				main.R[1] = 0xFFFF0000
-				main.R[2] = 0x00012345
+				main.R[1].Set(0xFFFF0000)
+				main.R[2].Set(0x00012345)
 			})
+
 			Context("#Execute", func() {
-				It("Should be diferent zero", func() {
-					Expect(main.SR.Data).To(Equal(uint32(0x00000001)))
-					Expect(main.R[add.Z()]).To(Equal(uint32(0x00002345)))
+				It("Should be diferent of zero", func() {
+					Expect(main.SR.Get()).To(Equal(uint32(0x00000001)))
+					Expect(main.R[add.Z()].Get()).To(Equal(uint32(0x00002345)))
 				})
 			})
 			
@@ -167,13 +170,13 @@ var _ = Describe("InstructionsF", func() {
 
 		When("Result has signal", func() {
 			BeforeEach(func() {
-				main.R[1] = 0x80000000
-				main.R[2] = 0x00012345
+				main.R[1].Set(0x80000000)
+				main.R[2].Set(0x00012345)
 			})
 			Context("#Execute", func() {
 				It("Should be diferent zero", func() {
-					Expect(main.SR.Data).To(Equal(uint32(0x00000010)))
-					Expect(main.R[add.Z()]).To(Equal(uint32(0x80012345)))
+					Expect(main.SR.Get()).To(Equal(uint32(0x00000010)))
+					Expect(main.R[add.Z()].Get()).To(Equal(uint32(0x80012345)))
 				})
 			})
 			
@@ -190,13 +193,13 @@ var _ = Describe("InstructionsF", func() {
 
 		When("Result has overflow with signal", func() {
 			BeforeEach(func() {
-				main.R[1] = 0x7FFFFFFF
-				main.R[2] = 0x7FFFFFFF
+				main.R[1].Set(0x7FFFFFFF)
+				main.R[2].Set(0x7FFFFFFF)
 			})
 			Context("#Execute", func() {
 				It("Should be diferent zero", func() {
-					Expect(main.SR.Data).To(Equal(uint32(0x00000018)))
-					Expect(main.R[add.Z()]).To(Equal(uint32(0xFFFFFFFE)))
+					Expect(main.SR.Get()).To(Equal(uint32(0x00000018)))
+					Expect(main.R[add.Z()].Get()).To(Equal(uint32(0xFFFFFFFE)))
 				})
 			})
 			
@@ -213,13 +216,13 @@ var _ = Describe("InstructionsF", func() {
 
 		When("Result has overflow with carry and signal", func() {
 			BeforeEach(func() {
-				main.R[1] = 0xFFFFFFFF
-				main.R[2] = 0xFFFFFFFF
+				main.R[1].Set(0xFFFFFFFF)
+				main.R[2].Set(0xFFFFFFFF)
 			})
 			Context("#Execute", func() {
 				It("Should be diferent zero", func() {
-					Expect(main.SR.Data).To(Equal(uint32(0x00000019)))
-					Expect(main.R[add.Z()]).To(Equal(uint32(0xFFFFFFFE)))
+					Expect(main.SR.Get()).To(Equal(uint32(0x00000019)))
+					Expect(main.R[add.Z()].Get()).To(Equal(uint32(0xFFFFFFFE)))
 				})
 			})
 			
@@ -239,25 +242,25 @@ var _ = Describe("InstructionsF", func() {
 		var sub main.Sub
 
 		JustBeforeEach(func() {
-			main.PC = 0x00000008
-			main.IR.Data = uint32(0x08611000)
+			main.PC.Set(0x00000008)
+			main.IR.Set(0x08611000)
 			sub.New()
 			sub.Execute()
 		})
 
 		AfterEach(func() {
-			main.SR.Data = uint32(0)
+			main.SR.Set(uint32(0) )
 		})
 
 		When("Result is zero", func() {
 			BeforeEach(func() {
-				main.R[1] = 0
-				main.R[2] = 0
+				main.R[1].Set(0)
+				main.R[2].Set(0)
 			})
 			Context("#Execute", func() {
 				It("Should be equal zero", func() {
-					Expect(main.SR.Data).To(Equal(uint32(0x00000040)))
-					Expect(main.R[sub.Z()]).To(Equal(uint32(0x0)))
+					Expect(main.SR.Get()).To(Equal(uint32(0x00000040)))
+					Expect(main.R[sub.Z()].Get()).To(Equal(uint32(0x0)))
 				})
 			})
 			
@@ -273,16 +276,16 @@ var _ = Describe("InstructionsF", func() {
 
 		When("Result has overflow", func() {
 			BeforeEach(func() {
-					main.R[1] = 0x80000000
-					main.R[2] = 0x7FFFFFFF
+					main.R[1].Set(0x80000000)
+					main.R[2].Set(0x7FFFFFFF)
 			})
 
 			Context("#Execute", func() {
-				// 0x00012345 − 0xFFFF0000 = −FFFDDCBB
-				// !(-FFFDDCBB) + 1 = 22345
+				// 0x00012345 − 0xFFFF0000.Set(−FFFDDCBB )
+				// !(-FFFDDCBB) + 1.Set(22345     )
 				It("Should be diferent zero", func() {
-					Expect(main.SR.Data).To(Equal(uint32(0x00000008)))
-					Expect(main.R[sub.Z()]).To(Equal(uint32(0x00000001)))
+					Expect(main.SR.Get()).To(Equal(uint32(0x00000008)))
+					Expect(main.R[sub.Z()].Get()).To(Equal(uint32(0x00000001)))
 				})
 			})
 			
@@ -299,13 +302,13 @@ var _ = Describe("InstructionsF", func() {
 
 		When("Result has signal and overflow", func() {
 			BeforeEach(func() {
-				main.R[1] = 0xFFFFFFFE
-				main.R[2] = 0x00000001
+				main.R[1].Set(0xFFFFFFFE)
+				main.R[2].Set(0x00000001)
 			})
 			Context("#Execute", func() {
 				It("Should be diferent zero", func() {
-					Expect(main.SR.Data).To(Equal(uint32(0x00000018)))
-					Expect(main.R[sub.Z()]).To(Equal(uint32(0xFFFFFFFD)))
+					Expect(main.SR.Get()).To(Equal(uint32(0x00000018)))
+					Expect(main.R[sub.Z()].Get()).To(Equal(uint32(0xFFFFFFFD)))
 				})
 			})
 			
@@ -325,31 +328,31 @@ var _ = Describe("InstructionsF", func() {
 		var mul main.Mul
 
 		JustBeforeEach(func() {
-			main.PC = 0x00000008
-			// OP = 000100
+			main.PC.Set(0x00000008)
+			// OP = 00010
 			// Z = 00111
 			// I = 00011
 			// X = 00001
 			// X = 00010
-			main.IR.Data = uint32(0x10E11003)
+			main.IR.Set(0x10E11003)
 			mul.New()
 			mul.Execute()
 		})
 
 		AfterEach(func() {
-			main.SR.Data = uint32(0)
+			main.SR.Set(uint32(0) )
 		})
 
 		When("Result is zero", func() {
 			BeforeEach(func() {
-				main.R[1] = 0
-				main.R[2] = 0x5
+				main.R[1].Set(0)
+				main.R[2].Set(0x5)
 			})
 			Context("#Execute", func() {
 				It("Should be equal zero", func() {
-					Expect(main.SR.Data).To(Equal(uint32(0x00000040)))
-					Expect(main.R[mul.Z()]).To(Equal(uint32(0x0)))
-					Expect(main.R[mul.I5()]).To(Equal(uint32(0x0)))
+					Expect(main.SR.Get()).To(Equal(uint32(0x00000040)))
+					Expect(main.R[mul.Z()].Get()).To(Equal(uint32(0x0)))
+					Expect(main.R[mul.I5()].Get()).To(Equal(uint32(0x0)))
 				})
 			})
 			
@@ -365,17 +368,17 @@ var _ = Describe("InstructionsF", func() {
 
 		When("Result has not status", func() {
 			BeforeEach(func() {
-					main.R[1] = 0x00000010
-					main.R[2] = 0x00000010
+					main.R[1].Set(0x00000010)
+					main.R[2].Set(0x00000010)
 			})
 
 			Context("#Execute", func() {
-				// 0x00012345 − 0xFFFF0000 = −FFFDDCBB
-				// !(-FFFDDCBB) + 1 = 22345
+				// 0x00012345 − 0xFFFF0000.Set(−FFFDDCBB )
+				// !(-FFFDDCBB) + 1.Set(22345     )
 				It("Should be diferent zero", func() {
-					Expect(main.SR.Data).To(Equal(uint32(0x00000000)))
-					Expect(main.R[mul.Z()]).To(Equal(uint32(0x00000100)))
-					Expect(main.R[mul.I5()]).To(Equal(uint32(0x00000000)))
+					Expect(main.SR.Get()).To(Equal(uint32(0x00000000)))
+					Expect(main.R[mul.Z()].Get()).To(Equal(uint32(0x00000100)))
+					Expect(main.R[mul.I5()].Get()).To(Equal(uint32(0x00000000)))
 				})
 			})
 			
@@ -392,14 +395,14 @@ var _ = Describe("InstructionsF", func() {
 
 		When("Result has carry", func() {
 			BeforeEach(func() {
-				main.R[1] = 0xFFFFFFFE
-				main.R[2] = 0x00000011
+				main.R[1].Set(0xFFFFFFFE)
+				main.R[2].Set(0x00000011)
 			})
 			Context("#Execute", func() {
 				It("Should be diferent zero", func() {
-					Expect(main.SR.Data).To(Equal(uint32(0x00000001)))
-					Expect(main.R[mul.Z()]).To(Equal(uint32(0xFFFFFFDE)))
-					Expect(main.R[mul.I5()]).To(Equal(uint32(0x000000010)))
+					Expect(main.SR.Get()).To(Equal(uint32(0x00000001)))
+					Expect(main.R[mul.Z()].Get()).To(Equal(uint32(0xFFFFFFDE)))
+					Expect(main.R[mul.I5()].Get()).To(Equal(uint32(0x000000010)))
 				})
 			})
 			
@@ -419,32 +422,32 @@ var _ = Describe("InstructionsF", func() {
 		var sll main.Sll
 
 		JustBeforeEach(func() {
-			main.PC = 0x00000008
-			// OP = 000100
-			// Z = 00111
-			// I = 00011
-			// X = 00001
-			// Y = 00010
-			main.IR.Data = uint32(0x10E11103)
+			main.PC.Set(0x00000008)
+			// OP.Set(000100)
+			// Z.Set(00111)
+			// I.Set(00011)
+			// X.Set(00001)
+			// Y.Set(00010)
+			main.IR.Set(0x10E11103)
 			sll.New()
 			sll.Execute()
 		})
 
 		AfterEach(func() {
-			main.SR.Data = uint32(0)
+			main.SR.Set(uint32(0) )
 		})
 
 		When("Result is zero", func() {
 			BeforeEach(func() {
-				main.R[1] = 0
-				main.R[2] = 0
-				main.R[7] = 0
+				main.R[1].Set(0)
+				main.R[2].Set(0)
+				main.R[7].Set(0)
 			})
 			Context("#Execute", func() {
 				It("Should be equal zero", func() {
-					Expect(main.SR.Data).To(Equal(uint32(0x00000040)))
-					Expect(main.R[sll.Z()]).To(Equal(uint32(0x0)))
-					Expect(main.R[sll.X()]).To(Equal(uint32(0x0)))
+					Expect(main.SR.Get()).To(Equal(uint32(0x00000040)))
+					Expect(main.R[sll.Z()].Get()).To(Equal(uint32(0x0)))
+					Expect(main.R[sll.X()].Get()).To(Equal(uint32(0x0)))
 				})
 			})
 			
@@ -460,17 +463,17 @@ var _ = Describe("InstructionsF", func() {
 
 		When("Result has not status", func() {
 			BeforeEach(func() {
-					main.R[2] = 0x1 // Y
-					main.R[7] = 0x0 // Z
+					main.R[2].Set(0x1) // Y
+					main.R[7].Set(0x0) // Z
 			})
 
 			Context("#Execute", func() {
-				// 0x00012345 − 0xFFFF0000 = −FFFDDCBB
-				// !(-FFFDDCBB) + 1 = 22345
+				// 0x00012345 − 0xFFFF0000.Set(−FFFDDCBB )
+				// !(-FFFDDCBB) + 1.Set(22345     )
 				It("Should be diferent zero", func() {
-					Expect(main.SR.Data).To(Equal(uint32(0x00000000)))
-					Expect(main.R[sll.Z()]).To(Equal(uint32(0x00000000)))
-					Expect(main.R[sll.X()]).To(Equal(uint32(0x00000008)))
+					Expect(main.SR.Get()).To(Equal(uint32(0x00000000)))
+					Expect(main.R[sll.Z()].Get()).To(Equal(uint32(0x00000000)))
+					Expect(main.R[sll.X()].Get()).To(Equal(uint32(0x00000008)))
 				})
 			})
 			
@@ -487,14 +490,14 @@ var _ = Describe("InstructionsF", func() {
 
 		When("Result has carry because Rz is greater than 0", func() {
 			BeforeEach(func() {
-				main.R[2] = 0x1
-				main.R[7] = 0x1
+				main.R[2].Set(0x1)
+				main.R[7].Set(0x1)
 			})
 			Context("#Execute", func() {
 				It("Should be diferent zero", func() {
-					Expect(main.SR.Data).To(Equal(uint32(0x00000001)))
-					Expect(main.R[sll.Z()]).To(Equal(uint32(0x8)))
-					Expect(main.R[sll.X()]).To(Equal(uint32(0x8)))
+					Expect(main.SR.Get()).To(Equal(uint32(0x00000001)))
+					Expect(main.R[sll.Z()].Get()).To(Equal(uint32(0x8)))
+					Expect(main.R[sll.X()].Get()).To(Equal(uint32(0x8)))
 				})
 			})
 			
@@ -511,14 +514,14 @@ var _ = Describe("InstructionsF", func() {
 
 		When("Result has carry because RY overflow", func() {
 			BeforeEach(func() {
-				main.R[2] = 0x80000001
-				main.R[7] = 0x1
+				main.R[2].Set(0x80000001)
+				main.R[7].Set(0x1)
 			})
 			Context("#Execute", func() {
 				It("Should be diferent zero", func() {
-					Expect(main.SR.Data).To(Equal(uint32(0x00000001)))
-					Expect(main.R[sll.Z()]).To(Equal(uint32(0xC)))
-					Expect(main.R[sll.X()]).To(Equal(uint32(0x8)))
+					Expect(main.SR.Get()).To(Equal(uint32(0x00000001)))
+					Expect(main.R[sll.Z()].Get()).To(Equal(uint32(0xC)))
+					Expect(main.R[sll.X()].Get()).To(Equal(uint32(0x8)))
 				})
 			})
 			
@@ -538,31 +541,31 @@ var _ = Describe("InstructionsF", func() {
 		var muls main.Muls
 
 		JustBeforeEach(func() {
-			main.PC = 0x00000008
-			// OP = 000100
-			// Z = 00111
-			// I = 00011
-			// X = 00001
-			// X = 00010
-			main.IR.Data = uint32(0x10E11003)
+			main.PC.Set(0x00000008)
+			// OP.Set(000100    )
+			// Z.Set(00111     )
+			// I.Set(00011     )
+			// X.Set(00001     )
+			// X.Set(00010     )
+			main.IR.Set(0x10E11003)
 			muls.New()
 			muls.Execute()
 		})
 
 		AfterEach(func() {
-			main.SR.Data = uint32(0)
+			main.SR.Set(uint32(0) )
 		})
 
 		When("Result is zero", func() {
 			BeforeEach(func() {
-				main.R[1] = 0
-				main.R[2] = 0x5
+				main.R[1].Set(0)
+				main.R[2].Set(0x5)
 			})
 			Context("#Execute", func() {
 				It("Should be equal zero", func() {
-					Expect(main.SR.Data).To(Equal(uint32(0x00000040)))
-					Expect(main.R[muls.Z()]).To(Equal(uint32(0x0)))
-					Expect(main.R[muls.I5()]).To(Equal(uint32(0x0)))
+					Expect(main.SR.Get()).To(Equal(uint32(0x00000040)))
+					Expect(main.R[muls.Z()].Get()).To(Equal(uint32(0x0)))
+					Expect(main.R[muls.I5()].Get()).To(Equal(uint32(0x0)))
 				})
 			})
 			
@@ -578,17 +581,17 @@ var _ = Describe("InstructionsF", func() {
 
 		When("Result has not status", func() {
 			BeforeEach(func() {
-					main.R[1] = 0x00000010
-					main.R[2] = 0x00000010
+					main.R[1].Set(0x00000010)
+					main.R[2].Set(0x00000010)
 			})
 
 			Context("#Execute", func() {
-				// 0x00012345 − 0xFFFF0000 = −FFFDDCBB
-				// !(-FFFDDCBB) + 1 = 22345
+				// 0x00012345 − 0xFFFF0000.Set(−FFFDDCBB )
+				// !(-FFFDDCBB) + 1.Set(22345     )
 				It("Should be diferent zero", func() {
-					Expect(main.SR.Data).To(Equal(uint32(0x00000000)))
-					Expect(main.R[muls.Z()]).To(Equal(uint32(0x00000100)))
-					Expect(main.R[muls.I5()]).To(Equal(uint32(0x00000000)))
+					Expect(main.SR.Get()).To(Equal(uint32(0x00000000)))
+					Expect(main.R[muls.Z()].Get()).To(Equal(uint32(0x00000100)))
+					Expect(main.R[muls.I5()].Get()).To(Equal(uint32(0x00000000)))
 				})
 			})
 			
@@ -605,14 +608,14 @@ var _ = Describe("InstructionsF", func() {
 
 		When("Result has carry", func() {
 			BeforeEach(func() {
-				main.R[1] = 0xFFFFFFFE
-				main.R[2] = 0x00000011
+				main.R[1].Set(0xFFFFFFFE)
+				main.R[2].Set(0x00000011)
 			})
 			Context("#Execute", func() {
 				It("Should be diferent zero", func() {
-					Expect(main.SR.Data).To(Equal(uint32(0x00000001)))
-					Expect(main.R[muls.Z()]).To(Equal(uint32(0xFFFFFFDE)))
-					Expect(main.R[muls.I5()]).To(Equal(uint32(0x000000010)))
+					Expect(main.SR.Get()).To(Equal(uint32(0x00000001)))
+					Expect(main.R[muls.Z()].Get()).To(Equal(uint32(0xFFFFFFDE)))
+					Expect(main.R[muls.I5()].Get()).To(Equal(uint32(0x000000010)))
 				})
 			})
 			
@@ -632,32 +635,32 @@ var _ = Describe("InstructionsF", func() {
 		var sla main.Sla
 
 		JustBeforeEach(func() {
-			main.PC = 0x00000008
-			// OP = 000100
-			// Z = 00111
-			// I = 00011
-			// X = 00001
-			// Y = 00010
-			main.IR.Data = uint32(0x10E11103)
+			main.PC.Set(0x00000008)
+			// OP = 0001
+			// Z = 0011
+			// I = 0001
+			// X = 0000
+			// Y = 0001
+			main.IR.Set(0x10E11103)
 			sla.New()
 			sla.Execute()
 		})
 
 		AfterEach(func() {
-			main.SR.Data = uint32(0)
+			main.SR.Set(uint32(0) )
 		})
 
 		When("Result is zero", func() {
 			BeforeEach(func() {
-				main.R[1] = 0
-				main.R[2] = 0
-				main.R[7] = 0
+				main.R[1].Set(0)
+				main.R[2].Set(0)
+				main.R[7].Set(0)
 			})
 			Context("#Execute", func() {
 				It("Should be equal zero", func() {
-					Expect(main.SR.Data).To(Equal(uint32(0x00000040)))
-					Expect(main.R[sla.Z()]).To(Equal(uint32(0x0)))
-					Expect(main.R[sla.X()]).To(Equal(uint32(0x0)))
+					Expect(main.SR.Get()).To(Equal(uint32(0x00000040)))
+					Expect(main.R[sla.Z()].Get()).To(Equal(uint32(0x0)))
+					Expect(main.R[sla.X()].Get()).To(Equal(uint32(0x0)))
 				})
 			})
 			
@@ -673,17 +676,17 @@ var _ = Describe("InstructionsF", func() {
 
 		When("Result has not status", func() {
 			BeforeEach(func() {
-					main.R[2] = 0x1 // Y
-					main.R[7] = 0x0 // Z
+					main.R[2].Set(0x1) // Y
+					main.R[7].Set(0x0)  // Z  
 			})
 
 			Context("#Execute", func() {
-				// 0x00012345 − 0xFFFF0000 = −FFFDDCBB
-				// !(-FFFDDCBB) + 1 = 22345
+				// 0x00012345 − 0xFFFF0000.Set(−FFFDDCBB )
+				// !(-FFFDDCBB) + 1.Set(22345     )
 				It("Should be diferent zero", func() {
-					Expect(main.SR.Data).To(Equal(uint32(0x00000000)))
-					Expect(main.R[sla.Z()]).To(Equal(uint32(0x00000000)))
-					Expect(main.R[sla.X()]).To(Equal(uint32(0x00000008)))
+					Expect(main.SR.Get()).To(Equal(uint32(0x00000000)))
+					Expect(main.R[sla.Z()].Get()).To(Equal(uint32(0x00000000)))
+					Expect(main.R[sla.X()].Get()).To(Equal(uint32(0x00000008)))
 				})
 			})
 			
@@ -697,17 +700,42 @@ var _ = Describe("InstructionsF", func() {
 				})
 			})
 		})
+		
+		// caso de uso pelo file_test
+		// When("Result has carry because Rz is greater than 0", func() {
+		// 	BeforeEach(func() {
+		// 		main.R[0].Set(0x0)
+		// 		main.R[2].Set(0xFFF00000)
+		// 	})
+		// 	Context("#Execute", func() {
+		// 		It("Should be diferent zero", func() {
+		// 			Expect(main.SR.Get()).To(Equal(uint32(0x00000001)))
+		// 			Expect(main.R[sla.Z()].Get()).To(Equal(uint32(0x0)))
+		// 			Expect(main.R[sla.X()].Get()).To(Equal(uint32(0x80000000)))
+		// 		})
+		// 	})
+			
+		// 	Context("#Print", func() {
+		// 		It("Should view return instruction with SN in SR toggle", func() {
+		// 			sla.Print()
+		// 			w.Close()
+		// 			message, _ := ioutil.ReadAll(r)
+
+		// 			Expect(string(message)).To(Equal("0x00000008:\tsla r7,r1,r2,3           \tR7:R1=R7:R2<<3=0x0000000800000008,SR=0x00000001\n"))
+		// 		})
+		// 	})
+		// })
 
 		When("Result has carry because Rz is greater than 0", func() {
 			BeforeEach(func() {
-				main.R[2] = 0x1
-				main.R[7] = 0x1
+				main.R[2].Set(0x1)
+				main.R[7].Set(0x1)
 			})
 			Context("#Execute", func() {
 				It("Should be diferent zero", func() {
-					Expect(main.SR.Data).To(Equal(uint32(0x00000001)))
-					Expect(main.R[sla.Z()]).To(Equal(uint32(0x8)))
-					Expect(main.R[sla.X()]).To(Equal(uint32(0x8)))
+					Expect(main.SR.Get()).To(Equal(uint32(0x00000001)))
+					Expect(main.R[sla.Z()].Get()).To(Equal(uint32(0x8)))
+					Expect(main.R[sla.X()].Get()).To(Equal(uint32(0x8)))
 				})
 			})
 			
@@ -724,14 +752,14 @@ var _ = Describe("InstructionsF", func() {
 
 		When("Result has carry because RY overflow", func() {
 			BeforeEach(func() {
-				main.R[2] = 0x80000001
-				main.R[7] = 0x1
+				main.R[2].Set(0x80000001)
+				main.R[7].Set(0x1)
 			})
 			Context("#Execute", func() {
 				It("Should be diferent zero", func() {
-					Expect(main.SR.Data).To(Equal(uint32(0x00000001)))
-					Expect(main.R[sla.Z()]).To(Equal(uint32(0xC)))
-					Expect(main.R[sla.X()]).To(Equal(uint32(0x8)))
+					Expect(main.SR.Get()).To(Equal(uint32(0x00000001)))
+					Expect(main.R[sla.Z()].Get()).To(Equal(uint32(0xC)))
+					Expect(main.R[sla.X()].Get()).To(Equal(uint32(0x8)))
 				})
 			})
 			
@@ -751,33 +779,33 @@ var _ = Describe("InstructionsF", func() {
 		var div main.Div
 
 		JustBeforeEach(func() {
-			main.PC = 0x00000008
-			// OP = 000100
-			// Z = 00111
-			// I = 00011
-			// X = 00001
-			// Y = 00010
-			main.IR.Data = uint32(0x10E11003)
+			main.PC.Set(0x00000008)
+			// OP.Set(000100    )
+			// Z.Set(00111     )
+			// I.Set(00011     )
+			// X.Set(00001     )
+			// Y.Set(00010     )
+			main.IR.Set(0x10E11003)
 			div.New()
 			div.Execute()
 		})
 
 		AfterEach(func() {
-			main.SR.Data = uint32(0)
+			main.SR.Set(0)
 		})
 
 		Context("Result is zero", func() {
 			When("RX is zero", func() {
 				BeforeEach(func() {
-					main.R[1] = 0
-					main.R[2] = 5
+					main.R[1].Set(0)
+					main.R[2].Set(5)
 				})
 
 				Context("#Execute", func() {
 					It("Should be equal zero", func() {
-						Expect(main.SR.Data).To(Equal(uint32(0x00000040)))
-						Expect(main.R[div.Z()]).To(Equal(uint32(0x0)))
-						Expect(main.R[div.I5()]).To(Equal(uint32(0x0)))
+						Expect(main.SR.Get()).To(Equal(uint32(0x00000040)))
+						Expect(main.R[div.Z()].Get()).To(Equal(uint32(0x0)))
+						Expect(main.R[div.I5()].Get()).To(Equal(uint32(0x0)))
 					})
 				})
 				
@@ -793,15 +821,15 @@ var _ = Describe("InstructionsF", func() {
 
 			When("RY is zero", func() {
 				BeforeEach(func() {
-					main.R[1] = 5
-					main.R[2] = 0
+					main.R[1].Set(5)
+					main.R[2].Set(0)
 				})
 
 				Context("#Execute", func() {
 					It("Should be equal zero", func() {
-						Expect(main.SR.Data).To(Equal(uint32(0x00000060)))
-						Expect(main.R[div.Z()]).To(Equal(uint32(0x0)))
-						Expect(main.R[div.I5()]).To(Equal(uint32(0x0)))
+						Expect(main.SR.Get()).To(Equal(uint32(0x00000060)))
+						Expect(main.R[div.Z()].Get()).To(Equal(uint32(0x0)))
+						Expect(main.R[div.I5()].Get()).To(Equal(uint32(0x0)))
 					})
 				})
 				
@@ -818,17 +846,17 @@ var _ = Describe("InstructionsF", func() {
 
 		When("Result has not status", func() {
 			BeforeEach(func() {
-					main.R[1] = 0x00000010
-					main.R[2] = 0x00000010
+					main.R[1].Set(0x00000010)
+					main.R[2].Set(0x00000010)
 			})
 
 			Context("#Execute", func() {
-				// 0x00012345 − 0xFFFF0000 = −FFFDDCBB
-				// !(-FFFDDCBB) + 1 = 22345
+				// 0x00012345 − 0xFFFF0000.Set(−FFFDDCBB )
+				// !(-FFFDDCBB) + 1.Set(22345     )
 				It("Should be diferent zero", func() {
-					Expect(main.SR.Data).To(Equal(uint32(0x00000000)))
-					Expect(main.R[div.Z()]).To(Equal(uint32(0x00000001)))
-					Expect(main.R[div.I5()]).To(Equal(uint32(0x00000000)))
+					Expect(main.SR.Get()).To(Equal(uint32(0x00000000)))
+					Expect(main.R[div.Z()].Get()).To(Equal(uint32(0x00000001)))
+					Expect(main.R[div.I5()].Get()).To(Equal(uint32(0x00000000)))
 				})
 			})
 			
@@ -846,15 +874,15 @@ var _ = Describe("InstructionsF", func() {
 		Context("Result has carry", func() {
 			When("RY is greater than RX", func() {
 				BeforeEach(func() {
-					main.R[1] = 1
-					main.R[2] = 5
+					main.R[1].Set(1)
+					main.R[2].Set(5)
 				})
 
 				Context("#Execute", func() {
 					It("Should be equal zero", func() {
-						Expect(main.SR.Data).To(Equal(uint32(0x00000041)))
-						Expect(main.R[div.Z()]).To(Equal(uint32(0x0)))
-						Expect(main.R[div.I5()]).To(Equal(uint32(0x1)))
+						Expect(main.SR.Get()).To(Equal(uint32(0x00000041)))
+						Expect(main.R[div.Z()].Get()).To(Equal(uint32(0x0)))
+						Expect(main.R[div.I5()].Get()).To(Equal(uint32(0x1)))
 					})
 				})
 
@@ -871,15 +899,15 @@ var _ = Describe("InstructionsF", func() {
 
 			When("RX is not a multiple of RY", func() {
 				BeforeEach(func() {
-					main.R[1] = 9
-					main.R[2] = 5
+					main.R[1].Set(9)
+					main.R[2].Set(5)
 				})
 
 				Context("#Execute", func() {
 					It("Should be equal zero", func() {
-						Expect(main.SR.Data).To(Equal(uint32(0x00000001)))
-						Expect(main.R[div.Z()]).To(Equal(uint32(0x1)))
-						Expect(main.R[div.I5()]).To(Equal(uint32(0x4)))
+						Expect(main.SR.Get()).To(Equal(uint32(0x00000001)))
+						Expect(main.R[div.Z()].Get()).To(Equal(uint32(0x1)))
+						Expect(main.R[div.I5()].Get()).To(Equal(uint32(0x4)))
 					})
 				})
 

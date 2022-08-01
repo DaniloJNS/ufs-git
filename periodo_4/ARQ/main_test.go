@@ -8,6 +8,9 @@ import (
 )
 
 var _ = Describe("Main", func() {
+	BeforeEach(func() {
+		main.Setup_registers()
+	})
 
 	Describe("Instructions", func() {
 		Context("Store", func() {
@@ -72,22 +75,27 @@ var _ = Describe("Main", func() {
 
 				BeforeEach(func() {
 					address := uint32(0x00000004)
-					data = uint32(0xB536FC43)
+					data = uint32(0xB536F543)
 					main.Store32(uint32(address), data)
-					main.PC = address
+					main.PC.Set(address)
 					main.IR.Load()
 				})
 
 				It("load", func() {
-					Expect(main.IR.Data).To(Equal(data))
+					Expect(main.IR.Get()).To(Equal(data))
 				})
 
 				It("opcode", func() {
 					Expect(main.IR.Opcode()).To(Equal(uint8(0x2D)))
 				})
+
+				It("subcode", func() {
+					Expect(main.IR.SubCode()).To(Equal(uint8(0x5)))
+				})
 			})
 		
 		})
+
 		Context("Instruction", func() {
 			Context("Methods", func() {
 				var instruction *main.Instruction
@@ -97,37 +105,43 @@ var _ = Describe("Main", func() {
 				})
 
 				It("#Z", func() {
-					main.IR.Data = uint32(0xF6ADA254)
+					main.IR.Set(0xF6ADA254)
 
 					Expect(instruction.Z()).To(Equal(uint32(0x15)))
 				})
 
 				It("#X", func() {
-					main.IR.Data = uint32(0xF635A254)
+					main.IR.Set(0xF635A254)
 
 					Expect(instruction.X()).To(Equal(uint32(0x15)))
 				})
 
 				It("#Y", func() {
-					main.IR.Data = uint32(0xF635AA54)
+					main.IR.Set(0xF635AA54)
 
 					Expect(instruction.Y()).To(Equal(uint32(0x15)))
 				})
 
 				It("#L", func() {
-					main.IR.Data = uint32(0xFFFFF)
+					main.IR.Set(0xFFFFF)
 
 					Expect(instruction.L()).To(Equal(uint32(0x7FF)))
 				})
 
+				It("#I5", func() {
+					main.IR.Set(0xFFFF75)
+
+					Expect(instruction.I5()).To(Equal(uint32(0x15)))
+				})
+
 				It("#I11", func() {
-					main.IR.Data = uint32(0x2AFFFFF)
+					main.IR.Set(0x2AFFFFF)
 
 					Expect(instruction.I11()).To(Equal(uint32(0x7FF)))
 				})
 
 				It("#I16", func() {
-					main.IR.Data = uint32(0xA7FFFFFF)
+					main.IR.Set(0xA7FFFFFF)
 
 					Expect(instruction.I16()).To(Equal(uint32(0x07FFFFFF)))
 				})
@@ -140,28 +154,28 @@ var _ = Describe("Main", func() {
 
 				BeforeEach(func() {
 					instruction = &main.InstructionFormatU{}
-					main.R[0x15] = 0xAD36FC43
+					main.R[0x15].Set(0xAD36FC43)
 				})
 
 				It("#Z", func() {
-					main.IR.Data = uint32(0xF6ADA254)
+					main.IR.Set(0xF6ADA254)
 					instruction.New()
 
-					Expect(*instruction.RZ).To(Equal(uint32(0xAD36FC43)))
+					Expect(instruction.RZ.Get()).To(Equal(uint32(0xAD36FC43)))
 				})
 
 				It("#X", func() {
-					main.IR.Data = uint32(0xF635A254)
+					main.IR.Set(0xF635A254)
 					instruction.New()
 
-					Expect(*instruction.RX).To(Equal(uint32(0xAD36FC43)))
+					Expect(instruction.RX.Get()).To(Equal(uint32(0xAD36FC43)))
 				})
 
 				It("#Y", func() {
-					main.IR.Data = uint32(0xF635AA54)
+					main.IR.Set(0xF635AA54)
 					instruction.New()
 
-					Expect(*instruction.RY).To(Equal(uint32(0xAD36FC43)))
+					Expect(instruction.RY.Get()).To(Equal(uint32(0xAD36FC43)))
 				})
 			})
 		})
@@ -172,21 +186,21 @@ var _ = Describe("Main", func() {
 
 				BeforeEach(func() {
 					instruction = &main.InstructionFormatF{}
-					main.R[0x15] = 0xAD36FC43
+					main.R[0x15].Set(0xAD36FC43)
 				})
 
 				It("#Z", func() {
-					main.IR.Data = uint32(0xF6ADA254)
+					main.IR.Set(0xF6ADA254)
 					instruction.New()
 
-					Expect(*instruction.RZ).To(Equal(uint32(0xAD36FC43)))
+					Expect(instruction.RZ.Get()).To(Equal(uint32(0xAD36FC43)))
 				})
 
 				It("#X", func() {
-					main.IR.Data = uint32(0xF635A254)
+					main.IR.Set(0xF635A254)
 					instruction.New()
 
-					Expect(*instruction.RX).To(Equal(uint32(0xAD36FC43)))
+					Expect(instruction.RX.Get()).To(Equal(uint32(0xAD36FC43)))
 				})
 			})
 		})
