@@ -561,6 +561,12 @@ func (muls *Muls) Execute() {
     muls.MS, muls.LS = bits.Mul32(muls.RX.Get(), muls.RY.Get())
 }
 
+func Mul32(x, y uint32) (uint32, uint32) {
+    tmp := int64(x) * int64(y)
+
+    return uint32(tmp>>32), uint32(tmp)
+}
+
 func (muls *Muls) Status() {
     if muls.LS == 0 && muls.MS == 0{ SR.ZN() }
 
