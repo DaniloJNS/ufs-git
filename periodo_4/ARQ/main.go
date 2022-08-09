@@ -83,7 +83,7 @@ const (
      L             = uint32(0x000007FF)
      I5            = uint32(0x0000001F)
      I11           = uint32(0x000007FF)
-     I16           = uint32(0x07FFFFFF)
+     I16           = uint32(0x0000FFFF)
 
      DeslocOP      = uint32(26)
      DeslocSubCode = uint32(8)
@@ -112,6 +112,7 @@ type Executable interface {
     type Register struct {
 	data uint32
     }
+
     // Default read access
     func (register *Register) Get() uint32 {
 	return register.data
@@ -151,34 +152,55 @@ type Executable interface {
 	type StatusRegister struct {
 	    Register
 	}
+
+	    func convertBool(set bool ) uint32 {
+	        if set {
+	            return uint32(1)
+		} else {
+		    return uint32(0)
+		}
+	    }
+
 	// ZN (zero): equal to 0
-	    func (SR *StatusRegister) ZN() {
-		SR.Set(SR.Get() | 0x40)
+	    func (SR *StatusRegister) ZN(set bool ) {
+		bit :=  convertBool(set) << 6
+		resetBit:= uint32(0x000000001) << 6
+		SR.Set((SR.Get() & ^resetBit) | bit)
 	    }
 
 	// ZD (division by zero): divisor B = 0
-	    func (SR *StatusRegister) ZD() {
-		SR.Set(SR.Get() | 0x20)
+	    func (SR *StatusRegister) ZD(set bool) {
+		bit :=  convertBool(set) << 5
+		resetBit:= uint32(0x000000001) << 5
+		SR.Set((SR.Get() & ^resetBit) | bit)
 	    }
 
 	// SN (sign): indicates if the result of the operation has a negative sign
-	    func (SR *StatusRegister) SN() {
-		SR.Set(SR.Get() | 0x10)
+	    func (SR *StatusRegister) SN(set bool) {
+		bit :=  convertBool(set) << 4
+		resetBit:= uint32(0x000000001) << 4
+		SR.Set((SR.Get() & ^resetBit) | bit)
 	    }
 
 	// OV (overflow): capacity overflow
-	    func (SR *StatusRegister) OV() {
-		SR.Set(SR.Get() | 0x8)
+	    func (SR *StatusRegister) OV(set bool) {
+		bit :=  convertBool(set) << 3
+		resetBit:= uint32(0x000000001) << 3
+		SR.Set((SR.Get() & ^resetBit) | bit)
 	    }
 
 	// IV (invalid instruction): Invalid operation code
-	    func (SR *StatusRegister) IV() {
-		SR.Set(SR.Get() | 0x4)
+	    func (SR *StatusRegister) IV(set bool) {
+		bit :=  convertBool(set) << 2
+		resetBit:= uint32(0x000000001) << 2
+		SR.Set((SR.Get() & ^resetBit) | bit)
 	    }
 
 	// CY (carry): goes to an arithmetic
-	    func (SR *StatusRegister) CY() {
-		SR.Set(SR.Get() | 0x1)
+	    func (SR *StatusRegister) CY(set bool) {
+		bit :=  convertBool(set) << 0
+		resetBit:= uint32(0x000000001) << 0
+		SR.Set((SR.Get() & ^resetBit) | bit)
 	    }
     // }}} 
 
@@ -213,17 +235,30 @@ func (collection *InstructionCollection) New() {
 }
 
 func (collection *InstructionCollection) Setup() {
-    // collection.data[uint16(0)] = &Mov{}
-    // collection.data[uint16(1)] = &Movs{}
-    // collection.data[uint16(2)] = &Add{}
-    // collection.data[uint16(3)] = &Sub{}
-    // collection.data[uint16(4) * uint16(300) + uint16(0)] = &Mul{}
-    // collection.data[uint16(4) * uint16(300) + uint16(1)] = &Sll{}
-    // collection.data[uint16(4) * uint16(300) + uint16(2)] = &Muls{}
-    // collection.data[uint16(4) * uint16(300) + uint16(3)] = &Sla{}
-    // collection.data[uint16(4) * uint16(300) + uint16(4)] = &Div{}
+    collection.data[uint16(0)] = &Mov{}
+    collection.data[uint16(1)] = &Movs{}
+    collection.data[uint16(2)] = &Add{}
+    collection.data[uint16(3)] = &Sub{}
+    collection.data[uint16(4) * uint16(300) + uint16(0)] = &Mul{}
+    collection.data[uint16(4) * uint16(300) + uint16(1)] = &Sll{}
+    collection.data[uint16(4) * uint16(300) + uint16(2)] = &Muls{}
+    collection.data[uint16(4) * uint16(300) + uint16(3)] = &Sla{}
+    collection.data[uint16(4) * uint16(300) + uint16(4)] = &Div{}
+    collection.data[uint16(4) * uint16(300) + uint16(5)] = &Srl{}
+    collection.data[uint16(4) * uint16(300) + uint16(6)] = &Divs{}
+    collection.data[uint16(4) * uint16(300) + uint16(7)] = &Sra{}
+    collection.data[uint16(5)] = &Cmp{}
+    collection.data[uint16(6)] = &And{}
+    collection.data[uint16(7)] = &Or{}
+    collection.data[uint16(8)] = &Not{}
+    collection.data[uint16(9)] = &Xor{}
+    collection.data[uint16(18)] = &Addi{}
+    collection.data[uint16(19)] = &Subi{}
+    collection.data[uint16(20)] = &Muli{}
+    collection.data[uint16(21)] = &Divi{}
+    collection.data[uint16(22)] = &Modi{}
 }
-
+// FIX: case when não existts instructiion
 func (collection *InstructionCollection) Get() Executable {
     opcode := uint16(IR.Opcode())
     subcode := uint16(IR.SubCode())
@@ -341,11 +376,29 @@ func (collection *InstructionCollection) Get() Executable {
 		Instruction
 
 		RZ, RX Registers
+
+		MS uint32 // MS - Most Partial Signifitive Operation Result
+		LS uint32 // LS - Less Partial Signifitive Operation Result
+		
 	    }
 
 	    func (instruction *InstructionFormatF) New() {
 		instruction.RZ = R[instruction.Z()]
 		instruction.RX = R[instruction.X()]
+		instruction.MS = 0
+		instruction.LS = 0
+	    }
+
+	    func (instruction InstructionFormatF) I16s() uint32 {
+		return instruction.I16() | instruction.signal()
+	    }
+
+	    func (instruction *InstructionFormatF) signal() uint32 {
+		if (instruction.I16() >> 15) == uint32(0x1) {
+		   return uint32(0xFFFF0000)
+		} else {
+		   return uint32(0x00000000)
+		}
 	    }
 	// }}}
 
@@ -436,16 +489,14 @@ func (collection *InstructionCollection) Get() Executable {
 	}
 
 	func (add *Add) Status() {
-	    if add.LS == 0 { SR.ZN() }
+	    SR.ZN(add.LS == 0) 
 
-	    if (add.LS >> 31) == 1 { SR.SN() }
+	    SR.SN((add.LS >> 31) == 1)
 
-	    if add.MS == 1 { SR.CY() }
+	    SR.CY(add.MS == 1)
 
-	    if (add.RX.Get() >> 31) == (add.RY.Get() >> 31) &&
-	    (add.LS >> 31) != (add.RX.Get()) {
-		SR.OV()
-	    }
+	    SR.OV((add.RX.Get() >> 31) == (add.RY.Get() >> 31) &&
+		  (add.LS >> 31) != (add.RX.Get()))
 	}
 
 	func (add *Add) Store() {
@@ -464,20 +515,22 @@ func (collection *InstructionCollection) Get() Executable {
 	type Sub struct { InstructionFormatU }
 
 	func (sub *Sub) Execute() {
-	    sub.LS, sub.MS = bits.Sub32(sub.RX.Get(), sub.RY.Get(), 0)
+	    x := uint64(sub.RX.Get())
+	    y := uint64(sub.RY.Get())
+	    R := x - y
+
+	    sub.LS, sub.MS = uint32(R),  uint32(R >> 32)
 	}
 
 	func (sub *Sub) Status() {
-	    if sub.LS == 0 { SR.ZN() }
+	    SR.ZN(sub.LS == 0)
 
-	    if (sub.LS >> 31) == 1 { SR.SN() }
+	    SR.SN((sub.LS >> 31) == 1)
 
-	    if sub.MS == 1 { SR.CY() }
+	    SR.CY(sub.MS == 1)
 
-	    if (sub.RX.Get() >> 31) != (sub.RY.Get() >> 31) &&
-	       (sub.LS >> 31) != (sub.RX.Get()) {
-		SR.OV()
-	    }
+	    SR.OV((sub.RX.Get() >> 31) != (sub.RY.Get() >> 31) &&
+	   (sub.LS >> 31) != (sub.RX.Get()))
 	}
 
 	func (sub *Sub) Store() {
@@ -493,8 +546,6 @@ func (collection *InstructionCollection) Get() Executable {
     // }}}
 // }}
 
-
-
 type Mul struct { InstructionFormatUforSubCode }
 
 // R[I] : R[z] = R[x] * R[y]
@@ -503,9 +554,9 @@ func (mul *Mul) Execute() {
 }
 
 func (mul *Mul) Status() {
-    if mul.MS == 0 && mul.LS == 0 { SR.ZN() }
+    SR.ZN(mul.MS == 0 && mul.LS == 0)
 
-    if (mul.MS) != 0 { SR.CY() }
+    SR.CY((mul.MS) != 0)
 }
 
 func (mul * Mul) Store() {
@@ -531,15 +582,15 @@ func (sll *Sll) Execute() {
 func (sll *Sll) sll32() (uint32, uint32) {
     tmp := uint64(sll.RZ.Get()) << 32 | uint64(sll.RY.Get())
 
-    tmp <<= uint64(sll.I5())
+    tmp <<= uint64(sll.Desloc())
 
     return uint32(tmp >> 32), uint32(tmp)
 }
 
 func (sll *Sll) Status() {
-    if sll.MS == 0 && sll.LS == 0{ SR.ZN() }
+    SR.ZN(sll.MS == 0 && sll.LS == 0)
 
-    if (sll.MS) != 0 { SR.CY() }
+    SR.CY((sll.MS) != 0)
 }
 
 func (sll *Sll) Store() {
@@ -548,7 +599,7 @@ func (sll *Sll) Store() {
 }
 
 func(sll * Sll) Print() {
-    execution := fmt.Sprintf("R%d:R%d=R%d:R%d<<%d=0x%08X%08X,SR=0x%08X",sll.Z(), sll.X(), sll.Z(), sll.Y(), sll.I5(), sll.RZ.Get(), sll.RX.Get(), SR.Get())
+    execution := fmt.Sprintf("R%d:R%d=R%d:R%d<<%d=0x%08X%08X,SR=0x%08X",sll.Z(), sll.X(), sll.Z(), sll.Y(), sll.Desloc(), sll.RZ.Get(), sll.RX.Get(), SR.Get())
     code := fmt.Sprintf("sll r%d,r%d,r%d,%d", sll.Z(), sll.X(), sll.Y(), sll.I5())
 
     write(code, execution)
@@ -558,19 +609,21 @@ type Muls struct { InstructionFormatUforSubCode }
 
 // R[I] : R[z] = R[x] * R[y]
 func (muls *Muls) Execute() {
-    muls.MS, muls.LS = bits.Mul32(muls.RX.Get(), muls.RY.Get())
+    muls.MS, muls.LS = muls.Mul32(muls.RX.Get(), muls.RY.Get())
 }
 
-func Mul32(x, y uint32) (uint32, uint32) {
-    tmp := int64(x) * int64(y)
+func (muls *Muls) Mul32(x, y uint32) (uint32, uint32) {
+    var tmp int64
+
+    tmp = int64(x) * int64(y)
 
     return uint32(tmp>>32), uint32(tmp)
 }
 
 func (muls *Muls) Status() {
-    if muls.LS == 0 && muls.MS == 0{ SR.ZN() }
+    SR.ZN(muls.LS == 0 && muls.MS == 0)
 
-    if (muls.MS) != 0 { SR.CY() }
+    SR.OV((muls.MS) != 0)
 }
 
 func (muls *Muls) Store() {
@@ -593,17 +646,17 @@ func (sla *Sla) Execute() {
 }
 
 func (sla *Sla) sla32() (uint32, uint32) {
-    tmp := uint64(sla.RZ.Get()) << 32 | uint64(sla.RY.Get())
+    tmp := int64(sla.RZ.Get()) << 32 | (int64(sla.RY.Get()) & int64(0x00000000FFFFFFFF))
 
-    tmp <<= uint64(sla.Desloc())
+    tmp <<= sla.Desloc()
 
     return uint32(tmp >> 32), uint32(tmp)
 }
 
 func (sla *Sla) Status() {
-    if sla.MS == 0 && sla.LS == 0{ SR.ZN() }
+    SR.ZN(sla.MS == 0 && sla.LS == 0)
 
-    if sla.MS != 0 { SR.CY() }
+    SR.CY(sla.MS != 0)
 }
 
 func (sla *Sla) Store() {
@@ -632,11 +685,13 @@ func (div *Div) Execute() {
 }
 
 func (div *Div) Status() {
-    if div.LS == 0 { SR.ZN() }
+    SR.ZD(div.RY.Get() == 0) 
 
-    if div.RY.Get() == 0 { SR.ZD() }
+    if div.RY.Get() == 0 { return } // When has divi per zero only set ZD
 
-    if div.MS != 0 { SR.CY() }
+    SR.ZD(div.RY.Get() == 0)
+
+    SR.CY(div.MS != 0)
 }
 
 func (div *Div) Store() {
@@ -670,30 +725,465 @@ type Srl struct { InstructionFormatUforSubCode }
 
 // R[I] : R[z] = R[x] * R[y]
 func (srl *Srl) Execute() {
-    hi, lo := srl.slr32()
-
-    srl.RZ.Set(hi)
-    srl.RX.Set(lo)
-
-    if srl.RZ.Get() == 0 && srl.RX.Get() == 0{ SR.ZN() }
-
-    if srl.RZ.Get() != 0 { SR.CY() }
+    srl.MS, srl.LS = srl.slr32()
 }
 
 func (srl *Srl) slr32() (uint32, uint32) {
     tmp := uint64(srl.RZ.Get()) << 32 | uint64(srl.RY.Get())
 
-    tmp >>= uint64(srl.I5())
+    tmp >>= uint64(srl.Desloc())
 
     return uint32(tmp >> 32), uint32(tmp)
 }
 
+func (srl *Srl) Status() {
+    SR.ZN(srl.MS == 0 && srl.LS == 0)
+
+    SR.CY(srl.MS != 0)
+}
+
+func (srl *Srl) Store() {
+    srl.RZ.Set(srl.MS)
+    srl.RX.Set(srl.LS)
+}
+
 func(srl * Srl) Print() {
-    execution := fmt.Sprintf("R%d:R%d=R%d:R%d>>%d=0x%08X%08X,SR=0x%08X",srl.Z(), srl.X(), srl.Z(), srl.Y(), srl.I5(), srl.RZ.Get(), srl.RX.Get(), SR.Get())
+    execution := fmt.Sprintf("R%d:R%d=R%d:R%d>>%d=0x%08X%08X,SR=0x%08X",
+    srl.Z(), srl.X(), srl.Z(), srl.Y(), srl.Desloc(), srl.RZ.Get(), srl.RX.Get(), SR.Get())
     code := fmt.Sprintf("srl r%d,r%d,r%d,%d", srl.Z(), srl.X(), srl.Y(), srl.I5())
 
     write(code, execution)
 }
+
+type Divs struct { InstructionFormatUforSubCode }
+
+func (div *Divs)Execute() {
+    var x, y, hi, lo int32
+
+    x = int32(div.RX.Get())
+    y = int32(div.RY.Get())
+
+    if y != 0 {
+	hi = x % y
+	lo = x / y
+    } else {
+	hi = 0
+	lo = 0
+    }
+
+    div.MS = uint32(hi) 
+    div.LS = uint32(lo) 
+}
+
+func (div *Divs) Status() {
+
+    SR.ZD(div.RY.Get() == 0) 
+
+    if div.RY.Get() == 0 { return } // When has divi per zero only set ZD
+
+    SR.ZN(div.LS == 0)
+
+    SR.OV(div.MS != 0)
+}
+
+func (divs *Divs) Store() {
+    if SR.Get() != uint32(0x00000060){
+	divs.RI.Set(divs.MS)
+	divs.RZ.Set(divs.LS)
+    }
+}
+
+func(divs * Divs) Print() {
+    var execution string
+    var mod, quo uint32 
+
+    if SR.Get() != uint32(0x00000060){
+	mod = divs.RI.Get()
+	quo = divs.RZ.Get()
+    } else {
+	mod = divs.MS
+	quo = divs.LS
+    }
+
+    execution = fmt.Sprintf("R%d=R%d%%R%d=0x%08X,R%d=R%d/R%d=0x%08X,SR=0x%08X",
+			      divs.I5(), divs.X(), divs.Y(), mod, divs.Z(), divs.X(), divs.Y(), quo, SR.Get())
+
+    code := fmt.Sprintf("divs r%d,r%d,r%d,r%d", divs.I5(),  divs.Z(), divs.X(), divs.Y())
+
+    write(code, execution)
+}
+
+
+type Sra struct { InstructionFormatUforSubCode }
+
+// R[I] : R[z] = R[x] * R[y]
+func (sra *Sra) Execute() {
+    sra.MS, sra.LS = sra.slr32()
+}
+
+func (sra *Sra) slr32() (uint32, uint32) {
+    tmp := int64(sra.RZ.Get()) << 32 | (int64(sra.RY.Get()) & int64(0x00000000FFFFFFFF)) // cast for 64 pode gerar extenção sinal indevida
+
+    tmp >>=sra.Desloc()
+
+    return uint32(tmp >> 32), uint32(tmp)
+}
+
+func (sra *Sra) Status() {
+    SR.ZN(sra.MS == 0 && sra.LS == 0)
+
+    SR.CY(sra.MS != 0)
+}
+
+func (sra *Sra) Store() {
+    sra.RZ.Set(sra.MS)
+    sra.RX.Set(sra.LS)
+}
+
+func(sra * Sra) Print() {
+    execution := fmt.Sprintf("R%d:R%d=R%d:R%d>>%d=0x%08X%08X,SR=0x%08X",
+    sra.Z(), sra.X(), sra.Z(), sra.Y(), sra.Desloc(), sra.RZ.Get(), sra.RX.Get(), SR.Get())
+    code := fmt.Sprintf("sra r%d,r%d,r%d,%d", sra.Z(), sra.X(), sra.Y(), sra.I5())
+
+    write(code, execution)
+}
+
+type Cmp struct { InstructionFormatU }
+
+func (cmp *Cmp) Execute() {
+    cmp.LS, cmp.MS = bits.Sub32(cmp.RX.Get(), cmp.RY.Get(), 0)
+}
+
+func (cmp *Cmp) Status() {
+    SR.ZN(cmp.LS == 0)
+
+    SR.SN((cmp.LS >> 31) == 1)
+
+    SR.CY(cmp.MS == 1)
+
+    SR.OV((cmp.RX.Get() >> 31) != (cmp.RY.Get() >> 31) &&
+   (cmp.LS >> 31) != (cmp.RX.Get()))
+}
+
+func (cmp *Cmp) Store() {}
+
+func(cmp * Cmp) Print() {
+    execution := fmt.Sprintf("SR=0x%08X", SR.Get())
+    code := fmt.Sprintf("cmp r%d,r%d", cmp.X(), cmp.Y())
+
+    write(code, execution)
+}
+
+type And struct { InstructionFormatU }
+
+func (and *And) Execute() {
+    and.LS = and.RX.Get() & and.RY.Get()
+}
+
+func (and *And) Status() {
+    SR.ZN(and.LS == 0)
+
+    SR.SN((and.LS >> 31) == 1)
+}
+
+func (and *And) Store() {
+    and.RZ.Set(and.LS)
+}
+
+func(and * And) Print() {
+    execution := fmt.Sprintf("R%d=R%d&R%d=0x%08X,SR=0x%08X", and.Z(), and.X(), and.Y(), and.RZ.Get(), SR.Get())
+    code := fmt.Sprintf("and r%d,r%d,r%d", and.Z(), and.X(), and.Y())
+
+    write(code, execution)
+}
+
+type Or struct { InstructionFormatU }
+
+func (and *Or) Execute() {
+    and.LS = and.RX.Get() | and.RY.Get()
+}
+
+func (and *Or) Status() {
+    SR.ZN(and.LS == 0)
+
+    SR.SN((and.LS >> 31) == 1)
+}
+
+func (and *Or) Store() {
+    and.RZ.Set(and.LS)
+}
+
+func(and * Or) Print() {
+    execution := fmt.Sprintf("R%d=R%d|R%d=0x%08X,SR=0x%08X", and.Z(), and.X(), and.Y(), and.RZ.Get(), SR.Get())
+    code := fmt.Sprintf("or r%d,r%d,r%d", and.Z(), and.X(), and.Y())
+
+    write(code, execution)
+}
+
+type Not struct { InstructionFormatU }
+
+func (not *Not) Execute() {
+    not.LS = ^not.RX.Get()
+}
+
+func (not *Not) Status() {
+    SR.ZN(not.LS == 0)
+
+    SR.SN((not.LS >> 31) == 1)
+}
+
+func (not *Not) Store() {
+    not.RZ.Set(not.LS)
+}
+
+func(not * Not) Print() {
+    execution := fmt.Sprintf("R%d=~R%d=0x%08X,SR=0x%08X", not.Z(), not.X(), not.RZ.Get(), SR.Get())
+    code := fmt.Sprintf("not r%d,r%d", not.Z(), not.X())
+
+    write(code, execution)
+}
+
+type Xor struct { InstructionFormatU }
+
+func (xor *Xor) Execute() {
+    xor.LS = xor.RX.Get() ^ xor.RY.Get()
+}
+
+func (xor *Xor) Status() {
+    SR.ZN(xor.LS == 0)
+
+    SR.SN((xor.LS >> 31) == 1)
+}
+
+func (xor *Xor) Store() {
+    xor.RZ.Set(xor.LS)
+}
+
+func(xor * Xor) Print() {
+    execution := fmt.Sprintf("R%d=R%d^R%d=0x%08X,SR=0x%08X", xor.Z(), xor.X(), xor.Y(), xor.RZ.Get(), SR.Get())
+    code := fmt.Sprintf("xor r%d,r%d,r%d", xor.Z(), xor.X(), xor.Y())
+
+    write(code, execution)
+}
+
+type Addi struct { InstructionFormatF }
+
+//
+func (addi *Addi) Execute() {
+    addi.LS, addi.MS = bits.Add32(addi.RX.Get(), addi.I16s(), 0)
+}
+
+func (addi *Addi) Status() {
+    SR.ZN(addi.LS == 0) 
+
+    SR.SN((addi.LS >> 31) == 1)
+
+    SR.CY(addi.MS == 1)
+
+    SR.OV((addi.RX.Get() >> 31) == (addi.I16s() >> 31) &&
+	  (addi.LS >> 31) != (addi.RX.Get()))
+}
+
+func (addi *Addi) Store() {
+    addi.RZ.Set(addi.LS)
+}
+
+func(addi * Addi) Print() {
+    execution := fmt.Sprintf("R%d=R%d+0x%08X=0x%08X,SR=0x%08X", addi.Z(), addi.X(), addi.I16s(), addi.RZ.Get(), SR.Get())
+    code := fmt.Sprintf("addi r%d,r%d,%d", addi.Z(), addi.X(), int32(addi.I16s()))
+
+    write(code, execution)
+}
+
+type Subi struct { InstructionFormatF }
+
+func (subi *Subi) Execute() {
+    x := uint64(subi.RX.Get())
+    y := uint64(subi.I16s())
+    R := x - y
+
+    subi.LS, subi.MS = uint32(R),  uint32(R >> 32)
+}
+
+func (subi *Subi) Status() {
+    SR.ZN(subi.LS == 0)
+
+    SR.SN((subi.LS >> 31) == 1)
+
+    SR.CY(subi.MS == 1)
+
+    SR.OV((subi.RX.Get() >> 31) != (subi.I16s() >> 31) &&
+   (subi.LS >> 31) != (subi.RX.Get()))
+}
+
+func (subi *Subi) Store() {
+    subi.RZ.Set(subi.LS)
+}
+
+func(subi * Subi) Print() {
+    execution := fmt.Sprintf("R%d=R%d-0x%08X=0x%08X,SR=0x%08X", subi.Z(), subi.X(), subi.I16s(), subi.RZ.Get(), SR.Get())
+    code := fmt.Sprintf("subi r%d,r%d,%d", subi.Z(), subi.X(), int32(subi.I16s()))
+
+    write(code, execution)
+}
+
+type Muli struct { InstructionFormatF } 
+
+// R[I] : R[z] = R[x] * R[y]
+func (muli *Muli) Execute() {
+    muli.MS, muli.LS = muli.Mul32(muli.RX.Get(), muli.I16s())
+}
+
+func (muli *Muli) Mul32(x, y uint32) (uint32, uint32) {
+    tmp := int64(x) * int64(y)
+
+    return uint32(tmp>>32), uint32(tmp)
+}
+
+func (muli *Muli) Status() {
+    SR.ZN(muli.LS == 0 && muli.MS == 0)
+
+    SR.OV((muli.MS) != 0)
+}
+
+func (muli *Muli) Store() {
+    muli.RZ.Set(muli.LS)
+}
+
+func(muli * Muli) Print() {
+    execution := fmt.Sprintf("R%d=R%d*0x%08X=0x%08X,SR=0x%08X", muli.Z(), muli.X(), muli.I16s(), muli.RZ.Get(), SR.Get())
+    code := fmt.Sprintf("muli r%d,r%d,r%d,%d", muli.I5(),  muli.Z(), muli.X(), muli.I16s())
+
+    write(code, execution)
+}
+
+type Divi struct { InstructionFormatF }
+
+func (divi *Divi)Execute() {
+    var x, y, lo int32
+
+    x = int32(divi.RX.Get())
+    y = int32(divi.I16s())
+
+    if y != 0 {
+	lo = x / y
+    } else {
+	lo = 0
+    }
+
+    divi.LS = uint32(lo) 
+}
+
+func (divi *Divi) Status() {
+    SR.ZD(divi.I16s() == 0) 
+
+    if divi.I16s() == 0 { return } // When has divi per zero only set ZD
+
+    SR.ZN(divi.LS == 0)
+
+    SR.OV(false)
+}
+
+func (divi *Divi) Store() {
+    if SR.Get() != uint32(0x00000060){
+	divi.RZ.Set(divi.LS)
+    }
+}
+
+func(divi * Divi) Print() {
+    var execution string
+    var quo uint32 
+
+    if SR.Get() != uint32(0x00000060){
+	quo = divi.RZ.Get()
+    } else {
+	quo = divi.LS
+    }
+
+    execution = fmt.Sprintf("R%d=R%d/0x%08X=0x%08X,SR=0x%08X",
+			      divi.Z(), divi.X(), divi.I16s(), quo, SR.Get())
+
+    code := fmt.Sprintf("divi r%d,r%d,%d", divi.Z(), divi.X(), divi.I16s())
+
+    write(code, execution)
+}
+
+type Modi struct { InstructionFormatF }
+
+func (modi *Modi)Execute() {
+    var x, y, lo int32
+
+    x = int32(modi.RX.Get())
+    y = int32(modi.I16s())
+
+    if y != 0 {
+	lo = x % y
+    } else {
+	lo = 0
+    }
+
+    modi.LS = uint32(lo) 
+}
+
+func (modi *Modi) Status() {
+    SR.ZD(modi.I16s() == 0) 
+
+    if modi.I16s() == 0 { return } // When has modi per zero only set ZD
+
+    SR.ZN(modi.LS == 0)
+
+    SR.OV(false)
+}
+
+func (modi *Modi) Store() {
+    if SR.Get() != uint32(0x00000060){
+	modi.RZ.Set(modi.LS)
+    }
+}
+
+func(modi * Modi) Print() {
+    var execution string
+    var quo uint32 
+
+    if SR.Get() != uint32(0x00000060){
+	quo = modi.RZ.Get()
+    } else {
+	quo = modi.LS
+    }
+
+    execution = fmt.Sprintf("R%d=R%d%%0x%08X=0x%08X,SR=0x%08X",
+			      modi.Z(), modi.X(), modi.I16s(), quo, SR.Get())
+
+    code := fmt.Sprintf("modi r%d,r%d,%d", modi.Z(), modi.X(), modi.I16s())
+
+    write(code, execution)
+}
+
+// type Cmp struct { InstructionFormatF }
+
+// func (cmp *Cmp) Execute() {
+//     cmp.LS, cmp.MS = bits.Sub32(cmp.RX.Get(), cmp.RY.Get(), 0)
+// }
+
+// func (cmp *Cmp) Status() {
+//     SR.ZN(cmp.LS == 0)
+
+//     SR.SN((cmp.LS >> 31) == 1)
+
+//     SR.CY(cmp.MS == 1)
+
+//     SR.OV((cmp.RX.Get() >> 31) != (cmp.RY.Get() >> 31) &&
+//    (cmp.LS >> 31) != (cmp.RX.Get()))
+// }
+
+// func (cmp *Cmp) Store() {}
+
+// func(cmp * Cmp) Print() {
+//     execution := fmt.Sprintf("SR=0x%08X", SR.Get())
+//     code := fmt.Sprintf("cmp r%d,r%d", cmp.X(), cmp.Y())
+
+//     write(code, execution)
+// }
 
 // Store 32 bits from memory
 func Store32(address uint32 , Data uint32) {
@@ -822,18 +1312,24 @@ func main() {
 
     R[0].Set(0)
 
-    // for i := 0; i < 6; i++ {
-	// IR.Load()
-	// PC.data += 1
+    for i := 0; i < 23; i++ {
+	IR.Load()
+	PC.data += 1
 
-	// exececutable := INSTRUCTION.Get()
+	// FIX: case for NOP instruction
+	// FIX: case for invalid instruction
+	exececutable := INSTRUCTION.Get()
 
-	// exececutable.New()
+	exececutable.New()
 
-	// exececutable.Execute()
+	exececutable.Execute()
 
-	// exececutable.Print()
-    // }
+	exececutable.Status()
+
+	exececutable.Store()
+
+	exececutable.Print()
+    }
 
     fmt.Println("[END OF SIMULATION]");
 }
