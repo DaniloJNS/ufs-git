@@ -259,6 +259,10 @@ type ExecutableFormatS interface {
 	    func (IR *InstructionRegister) Load() {
 		IR.data = Load32(PC.data / 4)
 	    }
+	//  Return when current instruction is an NOP
+	    func (IR *InstructionRegister) NOP() bool {
+		return IR.data == 0
+	    }
     // }}} 
 
 // }}}
@@ -1828,9 +1832,16 @@ func main() {
     for {
 	IR.Load()
 
-	// FIX: case for NOP instruction
-	// FIX: case for invalid instruction
+	if IR.NOP() {
+	    continue
+	}
+
 	exececutable := INSTRUCTION.Get()
+
+	if exececutable == nil {
+	    fmt.Printf("[INVALID INSTRUCTION @ 0x%08X]\n", IR.Get())
+	    break
+	}
 
 	exececutable.New()
 
