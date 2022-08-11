@@ -482,6 +482,14 @@ func (collection *InstructionCollection) Get() Executable {
 		   return uint32(0x00000000)
 		}
 	    }
+
+	    func (instruction *InstructionFormatF) Signal_OP() string {
+		if instruction.I16s() >> 31 == 1 {
+		    return "-"
+		} else {
+		    return "+"
+		}
+	    }
 	// }}}
 
 	// {{{ Formato S
@@ -1311,9 +1319,10 @@ func (l8 *L8) Store() {
     l8.RZ.Set(uint32(Load8(l8.LS)))
 }
 
+
 func(l8 * L8) Print() {
     execution := fmt.Sprintf("%s=MEM[0x%08X]=0x%02X",l8.RZ.UID(),l8.LS, l8.RZ.Get())
-    code := fmt.Sprintf("l8 %s,[%s+%d]", l8.RZ.ID(), l8.RX.ID(), l8.I16s())
+    code := fmt.Sprintf("l8 %s,[%s%s%d]", l8.RZ.ID(), l8.RX.ID(), l8.Signal_OP(), l8.I16s())
 
     write(code, execution)
 }
@@ -1332,7 +1341,7 @@ func (l16 *L16) Store() {
 
 func(l16 * L16) Print() {
     execution := fmt.Sprintf("%s=MEM[0x%08X]=0x%04X",l16.RZ.UID(),l16.LS * 2, l16.RZ.Get())
-    code := fmt.Sprintf("l16 %s,[%s+%d]", l16.RZ.ID(), l16.RX.ID(), l16.I16s())
+    code := fmt.Sprintf("l16 %s,[%s%s%d]", l16.RZ.ID(), l16.RX.ID(), l16.Signal_OP(), l16.I16s())
 
     write(code, execution)
 }
@@ -1351,7 +1360,7 @@ func (l32 *L32) Store() {
 
 func(l32 * L32) Print() {
     execution := fmt.Sprintf("%s=MEM[0x%08X]=0x%08X",l32.RZ.UID(),l32.LS * 4, l32.RZ.Get())
-    code := fmt.Sprintf("l32 %s,[%s+%d]", l32.RZ.ID(), l32.RX.ID(), l32.I16s())
+    code := fmt.Sprintf("l32 %s,[%s%s%d]", l32.RZ.ID(), l32.RX.ID(), l32.Signal_OP(), l32.I16s())
 
     write(code, execution)
 }
@@ -1370,7 +1379,7 @@ func (s8 *S8) Store() {
 
 func(s8 * S8) Print() {
     execution := fmt.Sprintf("MEM[0x%08X]=%s=0x%02X",s8.LS, s8.RZ.UID(), uint8(s8.RZ.Get()))
-    code := fmt.Sprintf("s8 [%s+%d],%s", s8.RX.ID(), s8.I16s(), s8.RZ.ID())
+    code := fmt.Sprintf("s8 [%s%s%d],%s", s8.RX.ID(), s8.Signal_OP(), s8.I16s(), s8.RZ.ID())
 
     write(code, execution)
 }
@@ -1389,7 +1398,7 @@ func (s16 *S16) Store() {
 
 func(s16 * S16) Print() {
     execution := fmt.Sprintf("MEM[0x%08X]=%s=0x%04X",s16.LS * 2, s16.RZ.UID(), uint16(s16.RZ.Get()))
-    code := fmt.Sprintf("s16 [%s+%d],%s", s16.RX.ID(), s16.I16s(), s16.RZ.ID())
+    code := fmt.Sprintf("s16 [%s%s%d],%s", s16.RX.ID(), s16.Signal_OP(), s16.I16s(), s16.RZ.ID())
 
     write(code, execution)
 }
@@ -1408,7 +1417,7 @@ func (s32 *S32) Store() {
 
 func(s32 * S32) Print() {
     execution := fmt.Sprintf("MEM[0x%08X]=%s=0x%08X",s32.LS * 4, s32.RZ.UID(), uint32(s32.RZ.Get()))
-    code := fmt.Sprintf("s32 [%s+%d],%s", s32.RX.ID(), s32.I16s(), s32.RZ.ID())
+    code := fmt.Sprintf("s32 [%s%s%d],%s", s32.RX.ID(), s32.Signal_OP(), s32.I16s(), s32.RZ.ID())
 
     write(code, execution)
 }
