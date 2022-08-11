@@ -7,6 +7,7 @@ import (
 	"log"
 	"math/bits"
 	"os"
+	"strings"
 )
 
 var (
@@ -113,23 +114,35 @@ type ExecutableFormatS interface {
     type Registers interface {
 	Get() uint32
 	Set(uint32)
+	ID() string
+	UID() string
     }
 
     // Struct Basic Regist
     type Register struct {
 	data uint32
+	Id string
     }
 
     // Default read access
-    func (register *Register) Get() uint32 {
-	return register.data
-    }
+	func (register *Register) Get() uint32 {
+	    return register.data
+	}
 
     // Default write access
-    func (register *Register) Set(val uint32) {
-	register.data = val
-    }
+	func (register *Register) Set(val uint32) {
+	    register.data = val
+	}
     
+    //indentify the register name
+	func (register *Register) ID() string{
+	    return register.Id
+	}
+
+	func (register *Register) UID() string{
+	    return strings.ToUpper(register.Id)
+	}
+
     // Default register without registrition for read and write
     type GeneralRegister struct {
 	Register
@@ -141,7 +154,7 @@ type ExecutableFormatS interface {
     }
 
     // Especific Set for blocked write in register
-    func (register *ReadOnlyRegister) Set(val uint32) {}
+	func (register *ReadOnlyRegister) Set(val uint32) {}
 
     // {{{ Program counter (PC): Controls the flow of program execution, pointing to the instructions
 	type ProgramCounter struct {
@@ -160,13 +173,13 @@ type ExecutableFormatS interface {
 	    Register
 	}
 
-	    func convertBool(set bool ) uint32 {
-	        if set {
-	            return uint32(1)
-		} else {
-		    return uint32(0)
-		}
+	func convertBool(set bool ) uint32 {
+	    if set {
+		return uint32(1)
+	    } else {
+		return uint32(0)
 	    }
+	}
 
 	// ZN (zero): equal to 0
 	    func (SR *StatusRegister) ZN(set bool ) {
@@ -536,8 +549,8 @@ func (collection *InstructionCollection) Get() Executable {
 	}
 
 	func(mov *Mov) Print() {
-	    execution := fmt.Sprintf("R%d=0x%08X", mov.Z(), mov.RZ.Get())
-	    code :=fmt.Sprintf("mov r%d, %d", mov.Z(), mov.RZ.Get())
+	    execution := fmt.Sprintf("%s=0x%08X", mov.RZ.UID(), mov.RZ.Get())
+	    code := fmt.Sprintf("mov %s,%d", mov.RZ.ID(), mov.RZ.Get())
 
 	    write(code, execution)
 	}
@@ -570,8 +583,8 @@ func (collection *InstructionCollection) Get() Executable {
 	}
 
 	func(movs * Movs) Print() {
-	    execution := fmt.Sprintf("R%d=0x%08X", movs.Z(), movs.RZ.Get())
-	    code := fmt.Sprintf("movs r%d, %d", movs.Z(), int32(movs.RZ.Get()))
+	    execution := fmt.Sprintf("%s=0x%08X", movs.RZ.UID(), movs.RZ.Get())
+	    code := fmt.Sprintf("movs %s,%d", movs.RZ.ID(), int32(movs.RZ.Get()))
 
 	    write(code, execution)
 	}
@@ -601,8 +614,8 @@ func (collection *InstructionCollection) Get() Executable {
 	}
 
 	func(add * Add) Print() {
-	    execution := fmt.Sprintf("R%d=R%d+R%d=0x%08X,SR=0x%08X", add.Z(), add.X(), add.Y(), add.RZ.Get(), SR.Get())
-	    code := fmt.Sprintf("add r%d,r%d,r%d", add.Z(), add.X(), add.Y())
+	    execution := fmt.Sprintf("%s=%s+%s=0x%08X,SR=0x%08X", add.RZ.UID(), add.RX.UID(), add.RY.UID(), add.RZ.Get(), SR.Get())
+	    code := fmt.Sprintf("add %s,%s,%s", add.RZ.ID(), add.RX.ID(), add.RY.ID())
 
 	    write(code, execution)
 	}
@@ -635,8 +648,8 @@ func (collection *InstructionCollection) Get() Executable {
 	}
 
 	func(sub * Sub) Print() {
-	    execution := fmt.Sprintf("R%d=R%d-R%d=0x%08X,SR=0x%08X", sub.Z(), sub.X(), sub.Y(), sub.RZ.Get(), SR.Get())
-	    code := fmt.Sprintf("sub r%d,r%d,r%d", sub.Z(), sub.X(), sub.Y())
+	    execution := fmt.Sprintf("%s=%s-%s=0x%08X,SR=0x%08X", sub.RZ.UID(), sub.RX.UID(), sub.RY.UID(), sub.RZ.Get(), SR.Get())
+	    code := fmt.Sprintf("sub %s,%s,%s", sub.RZ.ID(), sub.RX.ID(), sub.RY.ID())
 
 	    write(code, execution)
 	}
@@ -662,8 +675,8 @@ func (mul * Mul) Store() {
 }
 
 func(mul *Mul) Print() {
-    execution := fmt.Sprintf("R%d:R%d=R%d*R%d=0x%08X%08X,SR=0x%08X",mul.I5(), mul.Z(), mul.X(), mul.Y(), mul.RI.Get(), mul.RZ.Get(), SR.Get())
-    code := fmt.Sprintf("mul r%d,r%d,r%d,r%d", mul.I5(),  mul.Z(), mul.X(), mul.Y())
+    execution := fmt.Sprintf("%s:%s=%s*%s=0x%08X%08X,SR=0x%08X",mul.RI.UID(), mul.RZ.UID(), mul.RX.UID(), mul.RY.UID(), mul.RI.Get(), mul.RZ.Get(), SR.Get())
+    code := fmt.Sprintf("mul %s,%s,%s,%s", mul.RI.ID(),  mul.RZ.ID(), mul.RX.ID(), mul.RY.ID())
 
     write(code, execution)
 }
@@ -696,8 +709,8 @@ func (sll *Sll) Store() {
 }
 
 func(sll * Sll) Print() {
-    execution := fmt.Sprintf("R%d:R%d=R%d:R%d<<%d=0x%08X%08X,SR=0x%08X",sll.Z(), sll.X(), sll.Z(), sll.Y(), sll.Desloc(), sll.RZ.Get(), sll.RX.Get(), SR.Get())
-    code := fmt.Sprintf("sll r%d,r%d,r%d,%d", sll.Z(), sll.X(), sll.Y(), sll.I5())
+    execution := fmt.Sprintf("%s:%s=%s:%s<<%d=0x%08X%08X,SR=0x%08X",sll.RZ.UID(), sll.RX.UID(), sll.RZ.UID(), sll.RY.UID(), sll.Desloc(), sll.RZ.Get(), sll.RX.Get(), SR.Get())
+    code := fmt.Sprintf("sll %s,%s,%s,%d", sll.RZ.ID(), sll.RX.ID(), sll.RY.ID(), sll.I5())
 
     write(code, execution)
 }
@@ -729,8 +742,8 @@ func (muls *Muls) Store() {
 }
 
 func(mul * Muls) Print() {
-    execution := fmt.Sprintf("R%d:R%d=R%d*R%d=0x%08X%08X,SR=0x%08X",mul.I5(), mul.Z(), mul.X(), mul.Y(), mul.RI.Get(), mul.RZ.Get(), SR.Get())
-    code := fmt.Sprintf("muls r%d,r%d,r%d,r%d", mul.I5(),  mul.Z(), mul.X(), mul.Y())
+    execution := fmt.Sprintf("%s:%s=%s*%s=0x%08X%08X,SR=0x%08X",mul.RI.UID(), mul.RZ.UID(), mul.RX.UID(), mul.RY.UID(), mul.RI.Get(), mul.RZ.Get(), SR.Get())
+    code := fmt.Sprintf("muls %s,%s,%s,%s", mul.RI.ID(),  mul.RZ.ID(), mul.RX.ID(), mul.RY.ID())
 
     write(code, execution)
 }
@@ -762,8 +775,8 @@ func (sla *Sla) Store() {
 }
 
 func(sla * Sla) Print() {
-    execution := fmt.Sprintf("R%d:R%d=R%d:R%d<<%d=0x%08X%08X,SR=0x%08X",sla.Z(), sla.X(), sla.Z(), sla.Y(), sla.Desloc(), sla.RZ.Get(), sla.RX.Get(), SR.Get())
-    code := fmt.Sprintf("sla r%d,r%d,r%d,%d", sla.Z(), sla.X(), sla.Y(), sla.I5())
+    execution := fmt.Sprintf("%s:%s=%s:%s<<%d=0x%08X%08X,SR=0x%08X",sla.RZ.UID(), sla.RX.UID(), sla.RZ.UID(), sla.RY.UID(), sla.Desloc(), sla.RZ.Get(), sla.RX.Get(), SR.Get())
+    code := fmt.Sprintf("sla %s,%s,%s,%d", sla.RZ.ID(), sla.RX.ID(), sla.RY.ID(), sla.I5())
 
     write(code, execution)
 }
@@ -810,10 +823,10 @@ func(div * Div) Print() {
 	quo = div.LS
     }
 
-    execution = fmt.Sprintf("R%d=R%d%%R%d=0x%08X,R%d=R%d/R%d=0x%08X,SR=0x%08X",
-			      div.I5(), div.X(), div.Y(), mod, div.Z(), div.X(), div.Y(), quo, SR.Get())
+    execution = fmt.Sprintf("%s=%s%%%s=0x%08X,%s=%s/%s=0x%08X,SR=0x%08X",
+			      div.RI.UID(), div.RX.UID(), div.RY.UID(), mod, div.RZ.UID(), div.RX.UID(), div.RY.UID(), quo, SR.Get())
 
-    code := fmt.Sprintf("div r%d,r%d,r%d,r%d", div.I5(),  div.Z(), div.X(), div.Y())
+    code := fmt.Sprintf("div %s,%s,%s,%s", div.RI.ID(),  div.RZ.ID(), div.RX.ID(), div.RY.ID())
 
     write(code, execution)
 }
@@ -845,9 +858,9 @@ func (srl *Srl) Store() {
 }
 
 func(srl * Srl) Print() {
-    execution := fmt.Sprintf("R%d:R%d=R%d:R%d>>%d=0x%08X%08X,SR=0x%08X",
-    srl.Z(), srl.X(), srl.Z(), srl.Y(), srl.Desloc(), srl.RZ.Get(), srl.RX.Get(), SR.Get())
-    code := fmt.Sprintf("srl r%d,r%d,r%d,%d", srl.Z(), srl.X(), srl.Y(), srl.I5())
+    execution := fmt.Sprintf("%s:%s=%s:%s>>%d=0x%08X%08X,SR=0x%08X",
+    srl.RZ.UID(), srl.RX.UID(), srl.RZ.UID(), srl.RY.UID(), srl.Desloc(), srl.RZ.Get(), srl.RX.Get(), SR.Get())
+    code := fmt.Sprintf("srl %s,%s,%s,%d", srl.RZ.ID(), srl.RX.ID(), srl.RY.ID(), srl.I5())
 
     write(code, execution)
 }
@@ -902,10 +915,10 @@ func(divs * Divs) Print() {
 	quo = divs.LS
     }
 
-    execution = fmt.Sprintf("R%d=R%d%%R%d=0x%08X,R%d=R%d/R%d=0x%08X,SR=0x%08X",
-			      divs.I5(), divs.X(), divs.Y(), mod, divs.Z(), divs.X(), divs.Y(), quo, SR.Get())
+    execution = fmt.Sprintf("%s=%s%%%s=0x%08X,%s=%s/%s=0x%08X,SR=0x%08X",
+			      divs.RI.UID(), divs.RX.UID(), divs.RY.UID(), mod, divs.RZ.UID(), divs.RX.UID(), divs.RY.UID(), quo, SR.Get())
 
-    code := fmt.Sprintf("divs r%d,r%d,r%d,r%d", divs.I5(),  divs.Z(), divs.X(), divs.Y())
+    code := fmt.Sprintf("divs %s,%s,%s,%s", divs.RI.ID(),  divs.RZ.ID(), divs.RX.ID(), divs.RY.ID())
 
     write(code, execution)
 }
@@ -938,9 +951,9 @@ func (sra *Sra) Store() {
 }
 
 func(sra * Sra) Print() {
-    execution := fmt.Sprintf("R%d:R%d=R%d:R%d>>%d=0x%08X%08X,SR=0x%08X",
-    sra.Z(), sra.X(), sra.Z(), sra.Y(), sra.Desloc(), sra.RZ.Get(), sra.RX.Get(), SR.Get())
-    code := fmt.Sprintf("sra r%d,r%d,r%d,%d", sra.Z(), sra.X(), sra.Y(), sra.I5())
+    execution := fmt.Sprintf("%s:%s=%s:%s>>%d=0x%08X%08X,SR=0x%08X",
+    sra.RZ.UID(), sra.RX.UID(), sra.RZ.UID(), sra.RY.UID(), sra.Desloc(), sra.RZ.Get(), sra.RX.Get(), SR.Get())
+    code := fmt.Sprintf("sra %s,%s,%s,%d", sra.RZ.ID(), sra.RX.ID(), sra.RY.ID(), sra.I5())
 
     write(code, execution)
 }
@@ -970,7 +983,7 @@ func (cmp *Cmp) Store() {}
 
 func(cmp * Cmp) Print() {
     execution := fmt.Sprintf("SR=0x%08X", SR.Get())
-    code := fmt.Sprintf("cmp r%d,r%d", cmp.X(), cmp.Y())
+    code := fmt.Sprintf("cmp %s,%s", cmp.RX.ID(), cmp.RY.ID())
 
     write(code, execution)
 }
@@ -992,8 +1005,8 @@ func (and *And) Store() {
 }
 
 func(and * And) Print() {
-    execution := fmt.Sprintf("R%d=R%d&R%d=0x%08X,SR=0x%08X", and.Z(), and.X(), and.Y(), and.RZ.Get(), SR.Get())
-    code := fmt.Sprintf("and r%d,r%d,r%d", and.Z(), and.X(), and.Y())
+    execution := fmt.Sprintf("%s=%s&%s=0x%08X,SR=0x%08X", and.RZ.UID(), and.RX.UID(), and.RY.UID(), and.RZ.Get(), SR.Get())
+    code := fmt.Sprintf("and %s,%s,%s", and.RZ.ID(), and.RX.ID(), and.RY.ID())
 
     write(code, execution)
 }
@@ -1015,8 +1028,8 @@ func (and *Or) Store() {
 }
 
 func(and * Or) Print() {
-    execution := fmt.Sprintf("R%d=R%d|R%d=0x%08X,SR=0x%08X", and.Z(), and.X(), and.Y(), and.RZ.Get(), SR.Get())
-    code := fmt.Sprintf("or r%d,r%d,r%d", and.Z(), and.X(), and.Y())
+    execution := fmt.Sprintf("%s=%s|%s=0x%08X,SR=0x%08X", and.RZ.UID(), and.RX.UID(), and.RY.UID(), and.RZ.Get(), SR.Get())
+    code := fmt.Sprintf("or %s,%s,%s", and.RZ.ID(), and.RX.ID(), and.RY.ID())
 
     write(code, execution)
 }
@@ -1038,8 +1051,8 @@ func (not *Not) Store() {
 }
 
 func(not * Not) Print() {
-    execution := fmt.Sprintf("R%d=~R%d=0x%08X,SR=0x%08X", not.Z(), not.X(), not.RZ.Get(), SR.Get())
-    code := fmt.Sprintf("not r%d,r%d", not.Z(), not.X())
+    execution := fmt.Sprintf("%s=~%s=0x%08X,SR=0x%08X", not.RZ.UID(), not.RX.UID(), not.RZ.Get(), SR.Get())
+    code := fmt.Sprintf("not %s,%s", not.RZ.ID(), not.RX.ID())
 
     write(code, execution)
 }
@@ -1061,8 +1074,8 @@ func (xor *Xor) Store() {
 }
 
 func(xor * Xor) Print() {
-    execution := fmt.Sprintf("R%d=R%d^R%d=0x%08X,SR=0x%08X", xor.Z(), xor.X(), xor.Y(), xor.RZ.Get(), SR.Get())
-    code := fmt.Sprintf("xor r%d,r%d,r%d", xor.Z(), xor.X(), xor.Y())
+    execution := fmt.Sprintf("%s=%s^%s=0x%08X,SR=0x%08X", xor.RZ.UID(), xor.RX.UID(), xor.RY.UID(), xor.RZ.Get(), SR.Get())
+    code := fmt.Sprintf("xor %s,%s,%s", xor.RZ.ID(), xor.RX.ID(), xor.RY.ID())
 
     write(code, execution)
 }
@@ -1090,8 +1103,8 @@ func (addi *Addi) Store() {
 }
 
 func(addi * Addi) Print() {
-    execution := fmt.Sprintf("R%d=R%d+0x%08X=0x%08X,SR=0x%08X", addi.Z(), addi.X(), addi.I16s(), addi.RZ.Get(), SR.Get())
-    code := fmt.Sprintf("addi r%d,r%d,%d", addi.Z(), addi.X(), int32(addi.I16s()))
+    execution := fmt.Sprintf("%s=%s+0x%08X=0x%08X,SR=0x%08X", addi.RZ.UID(), addi.RX.UID(), addi.I16s(), addi.RZ.Get(), SR.Get())
+    code := fmt.Sprintf("addi %s,%s,%d", addi.RZ.ID(), addi.RX.ID(), int32(addi.I16s()))
 
     write(code, execution)
 }
@@ -1119,8 +1132,8 @@ func (subi *Subi) Store() {
 }
 
 func(subi * Subi) Print() {
-    execution := fmt.Sprintf("R%d=R%d-0x%08X=0x%08X,SR=0x%08X", subi.Z(), subi.X(), subi.I16s(), subi.RZ.Get(), SR.Get())
-    code := fmt.Sprintf("subi r%d,r%d,%d", subi.Z(), subi.X(), int32(subi.I16s()))
+    execution := fmt.Sprintf("%s=%s-0x%08X=0x%08X,SR=0x%08X", subi.RZ.UID(), subi.RX.UID(), subi.I16s(), subi.RZ.Get(), SR.Get())
+    code := fmt.Sprintf("subi %s,%s,%d", subi.RZ.ID(), subi.RX.ID(), int32(subi.I16s()))
 
     write(code, execution)
 }
@@ -1149,8 +1162,8 @@ func (muli *Muli) Store() {
 }
 
 func(muli * Muli) Print() {
-    execution := fmt.Sprintf("R%d=R%d*0x%08X=0x%08X,SR=0x%08X", muli.Z(), muli.X(), muli.I16s(), muli.RZ.Get(), SR.Get())
-    code := fmt.Sprintf("muli r%d,r%d,r%d,%d", muli.I5(),  muli.Z(), muli.X(), muli.I16s())
+    execution := fmt.Sprintf("%s=%s*0x%08X=0x%08X,SR=0x%08X", muli.RZ.UID(), muli.RX.UID(), muli.I16s(), muli.RZ.Get(), SR.Get())
+    code := fmt.Sprintf("muli %s,%s,%d", muli.RZ.ID(), muli.RX.ID(), muli.I16s())
 
     write(code, execution)
 }
@@ -1198,10 +1211,9 @@ func(divi * Divi) Print() {
 	quo = divi.LS
     }
 
-    execution = fmt.Sprintf("R%d=R%d/0x%08X=0x%08X,SR=0x%08X",
-			      divi.Z(), divi.X(), divi.I16s(), quo, SR.Get())
+    execution = fmt.Sprintf("%s=%s/0x%08X=0x%08X,SR=0x%08X", divi.RZ.UID(), divi.RX.UID(), divi.I16s(), quo, SR.Get())
 
-    code := fmt.Sprintf("divi r%d,r%d,%d", divi.Z(), divi.X(), divi.I16s())
+    code := fmt.Sprintf("divi %s,%s,%d", divi.RZ.ID(), divi.RX.ID(), divi.I16s())
 
     write(code, execution)
 }
@@ -1249,10 +1261,9 @@ func(modi * Modi) Print() {
 	quo = modi.LS
     }
 
-    execution = fmt.Sprintf("R%d=R%d%%0x%08X=0x%08X,SR=0x%08X",
-			      modi.Z(), modi.X(), modi.I16s(), quo, SR.Get())
+    execution = fmt.Sprintf("%s=%s%%0x%08X=0x%08X,SR=0x%08X", modi.RZ.UID(), modi.RX.UID(), modi.I16s(), quo, SR.Get())
 
-    code := fmt.Sprintf("modi r%d,r%d,%d", modi.Z(), modi.X(), modi.I16s())
+    code := fmt.Sprintf("modi %s,%s,%d", modi.RZ.ID(), modi.RX.ID(), modi.I16s())
 
     write(code, execution)
 }
@@ -1283,7 +1294,7 @@ func (cmpi *Cmpi) Store() {}
 
 func(cmpi * Cmpi) Print() {
     execution := fmt.Sprintf("SR=0x%08X", SR.Get())
-    code := fmt.Sprintf("cmpi r%d,%d", cmpi.X(), cmpi.I16s())
+    code := fmt.Sprintf("cmpi %s,%d", cmpi.RX.ID(), cmpi.I16s())
 
     write(code, execution)
 }
@@ -1301,8 +1312,8 @@ func (l8 *L8) Store() {
 }
 
 func(l8 * L8) Print() {
-    execution := fmt.Sprintf("R%d=MEM[0x%08X]=0x%02X",l8.Z(),l8.LS, l8.RZ.Get())
-    code := fmt.Sprintf("l8 r%d,[r%d+%d]", l8.Z(), l8.X(), l8.I16s())
+    execution := fmt.Sprintf("%s=MEM[0x%08X]=0x%02X",l8.RZ.UID(),l8.LS, l8.RZ.Get())
+    code := fmt.Sprintf("l8 %s,[%s+%d]", l8.RZ.ID(), l8.RX.ID(), l8.I16s())
 
     write(code, execution)
 }
@@ -1320,8 +1331,8 @@ func (l16 *L16) Store() {
 }
 
 func(l16 * L16) Print() {
-    execution := fmt.Sprintf("R%d=MEM[0x%08X]=0x%04X",l16.Z(),l16.LS, l16.RZ.Get())
-    code := fmt.Sprintf("l16 r%d,[r%d+%d]", l16.Z(), l16.X(), l16.I16s())
+    execution := fmt.Sprintf("%s=MEM[0x%08X]=0x%04X",l16.RZ.UID(),l16.LS * 2, l16.RZ.Get())
+    code := fmt.Sprintf("l16 %s,[%s+%d]", l16.RZ.ID(), l16.RX.ID(), l16.I16s())
 
     write(code, execution)
 }
@@ -1339,8 +1350,8 @@ func (l32 *L32) Store() {
 }
 
 func(l32 * L32) Print() {
-    execution := fmt.Sprintf("R%d=MEM[0x%08X]=0x%08X",l32.Z(),l32.LS, l32.RZ.Get())
-    code := fmt.Sprintf("l32 r%d,[r%d+%d]", l32.Z(), l32.X(), l32.I16s())
+    execution := fmt.Sprintf("%s=MEM[0x%08X]=0x%08X",l32.RZ.UID(),l32.LS * 4, l32.RZ.Get())
+    code := fmt.Sprintf("l32 %s,[%s+%d]", l32.RZ.ID(), l32.RX.ID(), l32.I16s())
 
     write(code, execution)
 }
@@ -1358,8 +1369,8 @@ func (s8 *S8) Store() {
 }
 
 func(s8 * S8) Print() {
-    execution := fmt.Sprintf("MEM[0x%08X]=R%d=0x%02X",s8.LS, s8.Z(), uint8(s8.RZ.Get()))
-    code := fmt.Sprintf("s8 [r%d+%d],r%d", s8.X(), s8.I16s(), s8.Z())
+    execution := fmt.Sprintf("MEM[0x%08X]=%s=0x%02X",s8.LS, s8.RZ.UID(), uint8(s8.RZ.Get()))
+    code := fmt.Sprintf("s8 [%s+%d],%s", s8.RX.ID(), s8.I16s(), s8.RZ.ID())
 
     write(code, execution)
 }
@@ -1377,8 +1388,8 @@ func (s16 *S16) Store() {
 }
 
 func(s16 * S16) Print() {
-    execution := fmt.Sprintf("MEM[0x%08X]=R%d=0x%04X",s16.LS, s16.Z(), uint16(s16.RZ.Get()))
-    code := fmt.Sprintf("s16 [r%d+%d],r%d", s16.X(), s16.I16s(), s16.Z())
+    execution := fmt.Sprintf("MEM[0x%08X]=%s=0x%04X",s16.LS * 2, s16.RZ.UID(), uint16(s16.RZ.Get()))
+    code := fmt.Sprintf("s16 [%s+%d],%s", s16.RX.ID(), s16.I16s(), s16.RZ.ID())
 
     write(code, execution)
 }
@@ -1396,8 +1407,8 @@ func (s32 *S32) Store() {
 }
 
 func(s32 * S32) Print() {
-    execution := fmt.Sprintf("MEM[0x%08X]=R%d=0x%08X",s32.LS, s32.Z(), uint32(s32.RZ.Get()))
-    code := fmt.Sprintf("s32 [r%d+%d],r%d", s32.X(), s32.I16s(), s32.Z())
+    execution := fmt.Sprintf("MEM[0x%08X]=%s=0x%08X",s32.LS * 4, s32.RZ.UID(), uint32(s32.RZ.Get()))
+    code := fmt.Sprintf("s32 [%s+%d],%s", s32.RX.ID(), s32.I16s(), s32.RZ.ID())
 
     write(code, execution)
 }
@@ -1745,32 +1756,41 @@ func Load16(address uint32) uint16 {
 func Load8(adress uint32) (Data uint8){
     return MEM[adress]
 }
+type varArgs map[string]interface{}
 
-func NewRegister(register_type string) Registers {
+func NewRegister(args varArgs) Registers {
     var register Registers
-    switch register_type {
-	case "ReadOnlyRegister": register = &ReadOnlyRegister{}
-	case "GeneralRegister":  register = &GeneralRegister{}
-	case "SR":		 register = &StatusRegister{}
-	case "IR":		 register = &InstructionRegister{}
-	case "SP":		 register = &StackPointer{}
-	case "PC":		 register = &ProgramCounter{}
-    }
 
+    id, ok := args["id"].(string)
+
+    if !ok { id = "" }
+
+    register_base := Register{ Id: id}
+
+    switch args["register_type"] {
+	case "ReadOnlyRegister": register = &ReadOnlyRegister{Register: register_base}
+	case "GeneralRegister":  register = &GeneralRegister{Register: register_base}
+	case "SR":		 register = &StatusRegister{Register: register_base}
+	case "IR":		 register = &InstructionRegister{Register: register_base}
+	case "SP":		 register = &StackPointer{Register: register_base}
+	case "PC":		 register = &ProgramCounter{Register: register_base}
+    }
+    
     return register
 }
 
 func Setup_registers() {
-    R[0] = NewRegister("ReadOnlyRegister")
+    R[0] = NewRegister(varArgs{ "register_type": "ReadOnlyRegister", "id": "r0" })
 
     for i := 1; i <= 27; i++ {
-        R[i] = NewRegister("GeneralRegister")
+	id := fmt.Sprintf("r%d", i)
+	R[i] = NewRegister(varArgs{ "register_type": "GeneralRegister", "id": id })
     }
 
-    R[I_SR] = NewRegister("SR")
-    R[I_PC] = NewRegister("PC")
-    R[I_IR] = NewRegister("IR")
-    R[I_SP] = NewRegister("SP")
+    R[I_SR] = NewRegister(varArgs{ "register_type": "SR", "id": "sr" })
+    R[I_PC] = NewRegister(varArgs{ "register_type": "PC", "id": "pc" })
+    R[I_IR] = NewRegister(varArgs{ "register_type": "IR", "id": "ir" })
+    R[I_SP] = NewRegister(varArgs{ "register_type": "SP", "id": "sp" })
 
     SR = R[I_SR].(*StatusRegister)
 
