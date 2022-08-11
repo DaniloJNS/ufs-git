@@ -67,6 +67,8 @@ var (
 	     R28 = IR
     */
     IR *InstructionRegister
+
+    STATUS uint32
 )
 
 const (
@@ -84,6 +86,7 @@ const (
      I5            = uint32(0x0000001F)
      I11           = uint32(0x000007FF)
      I16           = uint32(0x0000FFFF)
+     I26           = uint32(0x00FFFFFF)
 
      DeslocOP      = uint32(26)
      DeslocSubCode = uint32(8)
@@ -100,6 +103,10 @@ type Executable interface {
     Print()
 }
 
+type ExecutableFormatS interface {
+    Executable
+    PC()
+}
 // {{{ Struct For Registers
 
     // This interface define the format basic of register
@@ -168,11 +175,21 @@ type Executable interface {
 		SR.Set((SR.Get() & ^resetBit) | bit)
 	    }
 
+	    func (SR *StatusRegister) Get_ZN() bool {
+		ZN :=  (SR.Get() >> 6) & uint32(0x00000001)
+		return ZN == uint32(0x00000001)
+	    }
+
 	// ZD (division by zero): divisor B = 0
 	    func (SR *StatusRegister) ZD(set bool) {
 		bit :=  convertBool(set) << 5
 		resetBit:= uint32(0x000000001) << 5
 		SR.Set((SR.Get() & ^resetBit) | bit)
+	    }
+
+	    func (SR *StatusRegister) Get_ZD() bool {
+		ZN :=  (SR.Get() >> 5) & uint32(0x00000001)
+		return ZN == uint32(0x00000001)
 	    }
 
 	// SN (sign): indicates if the result of the operation has a negative sign
@@ -182,11 +199,21 @@ type Executable interface {
 		SR.Set((SR.Get() & ^resetBit) | bit)
 	    }
 
+	    func (SR *StatusRegister) Get_SN() bool {
+		ZN :=  (SR.Get() >> 4) & uint32(0x00000001)
+		return ZN == uint32(0x00000001)
+	    }
+
 	// OV (overflow): capacity overflow
 	    func (SR *StatusRegister) OV(set bool) {
 		bit :=  convertBool(set) << 3
 		resetBit:= uint32(0x000000001) << 3
 		SR.Set((SR.Get() & ^resetBit) | bit)
+	    }
+
+	    func (SR *StatusRegister) Get_OV() bool {
+		ZN :=  (SR.Get() >> 3) & uint32(0x00000001)
+		return ZN == uint32(0x00000001)
 	    }
 
 	// IV (invalid instruction): Invalid operation code
@@ -196,11 +223,21 @@ type Executable interface {
 		SR.Set((SR.Get() & ^resetBit) | bit)
 	    }
 
+	    func (SR *StatusRegister) Get_IV() bool {
+		ZN :=  (SR.Get() >> 2) & uint32(0x00000001)
+		return ZN == uint32(0x00000001)
+	    }
+
 	// CY (carry): goes to an arithmetic
 	    func (SR *StatusRegister) CY(set bool) {
 		bit :=  convertBool(set) << 0
 		resetBit:= uint32(0x000000001) << 0
 		SR.Set((SR.Get() & ^resetBit) | bit)
+	    }
+
+	    func (SR *StatusRegister) Get_CY() bool {
+		ZN :=  (SR.Get() >> 0) & uint32(0x00000001)
+		return ZN == uint32(0x00000001)
 	    }
     // }}} 
 
@@ -220,7 +257,7 @@ type Executable interface {
 
 	// Load instruction of memory in address PC for IR
 	    func (IR *InstructionRegister) Load() {
-		IR.data = Load32(PC.data)
+		IR.data = Load32(PC.data / 4)
 	    }
     // }}} 
 
@@ -257,6 +294,29 @@ func (collection *InstructionCollection) Setup() {
     collection.data[uint16(20)] = &Muli{}
     collection.data[uint16(21)] = &Divi{}
     collection.data[uint16(22)] = &Modi{}
+    collection.data[uint16(23)] = &Cmpi{}
+    collection.data[uint16(24)] = &L8{}
+    collection.data[uint16(25)] = &L16{}
+    collection.data[uint16(26)] = &L32{}
+    collection.data[uint16(27)] = &S8{}
+    collection.data[uint16(28)] = &S16{}
+    collection.data[uint16(29)] = &S32{}
+    collection.data[uint16(42)] = &Bae{}
+    collection.data[uint16(43)] = &Bat{}
+    collection.data[uint16(44)] = &Bbe{}
+    collection.data[uint16(45)] = &Bbt{}
+    collection.data[uint16(46)] = &Beq{}
+    collection.data[uint16(47)] = &Bge{}
+    collection.data[uint16(48)] = &Bgt{}
+    collection.data[uint16(49)] = &Biv{}
+    collection.data[uint16(50)] = &Ble{}
+    collection.data[uint16(51)] = &Blt{}
+    collection.data[uint16(52)] = &Bne{}
+    collection.data[uint16(53)] = &Bni{}
+    collection.data[uint16(54)] = &Bnz{}
+    collection.data[uint16(55)] = &Bun{}
+    collection.data[uint16(56)] = &Bzd{}
+    collection.data[uint16(63)] = &Int{}
 }
 // FIX: case when não existts instructiion
 func (collection *InstructionCollection) Get() Executable {
@@ -308,6 +368,11 @@ func (collection *InstructionCollection) Get() Executable {
 	// Return bits of 15 <-> 0 with size 16 bits
 	func (instruction Instruction) I16() uint32 {
 	    return (IR.data & I16)
+	}
+
+	// Return bits of 25 <-> 0 with size 16 bits
+	func (instruction Instruction) I26() uint32 {
+	    return (IR.data & I26)
 	}
     // }}} 
 
@@ -415,9 +480,37 @@ func (collection *InstructionCollection) Get() Executable {
 	    **/
 	    type InstructionFormatS struct {
 		Instruction
+
+		NAD uint32 // Address - New value for address
 	    }
 
-	    func (instruction *InstructionFormatS) New() {}
+	    func (instruction *InstructionFormatS) New() {
+		instruction.NAD = PC.data + 4
+	    }
+
+	    func (instruction *InstructionFormatS) Jump() {
+		instruction.NAD += instruction.I26s() * 4
+	    }
+
+	    func (instruction *InstructionFormatS) PC() {
+		PC.Set(instruction.NAD)
+	    }
+
+	    func (instruction *InstructionFormatS) Execute() {}
+
+	    func (instruction *InstructionFormatS) Status() {}
+
+	    func (instruction InstructionFormatS) I26s() uint32 {
+		return instruction.I26() | instruction.signal()
+	    }
+
+	    func (instruction *InstructionFormatS) signal() uint32 {
+		if (instruction.I26() >> 25) == uint32(0x1) {
+		   return uint32(0xFF000000)
+		} else {
+		   return uint32(0x00000000)
+		}
+	    }
 	// }}}
     /// }}}
 // }}}
@@ -493,7 +586,7 @@ func (collection *InstructionCollection) Get() Executable {
 
 	    SR.SN((add.LS >> 31) == 1)
 
-	    SR.CY(add.MS == 1)
+	    SR.CY(add.MS != 0)
 
 	    SR.OV((add.RX.Get() >> 31) == (add.RY.Get() >> 31) &&
 		  (add.LS >> 31) != (add.RX.Get()))
@@ -527,7 +620,7 @@ func (collection *InstructionCollection) Get() Executable {
 
 	    SR.SN((sub.LS >> 31) == 1)
 
-	    SR.CY(sub.MS == 1)
+	    SR.CY(sub.MS != 0)
 
 	    SR.OV((sub.RX.Get() >> 31) != (sub.RY.Get() >> 31) &&
 	   (sub.LS >> 31) != (sub.RX.Get()))
@@ -851,7 +944,11 @@ func(sra * Sra) Print() {
 type Cmp struct { InstructionFormatU }
 
 func (cmp *Cmp) Execute() {
-    cmp.LS, cmp.MS = bits.Sub32(cmp.RX.Get(), cmp.RY.Get(), 0)
+    x := int64(cmp.RX.Get())
+    y := int64(cmp.RY.Get())
+    R := x - y
+
+    cmp.LS, cmp.MS = uint32(R),  uint32(R >> 32)
 }
 
 func (cmp *Cmp) Status() {
@@ -859,7 +956,7 @@ func (cmp *Cmp) Status() {
 
     SR.SN((cmp.LS >> 31) == 1)
 
-    SR.CY(cmp.MS == 1)
+    SR.CY(cmp.MS != 0)
 
     SR.OV((cmp.RX.Get() >> 31) != (cmp.RY.Get() >> 31) &&
    (cmp.LS >> 31) != (cmp.RX.Get()))
@@ -978,7 +1075,7 @@ func (addi *Addi) Status() {
 
     SR.SN((addi.LS >> 31) == 1)
 
-    SR.CY(addi.MS == 1)
+    SR.CY(addi.MS != 0)
 
     SR.OV((addi.RX.Get() >> 31) == (addi.I16s() >> 31) &&
 	  (addi.LS >> 31) != (addi.RX.Get()))
@@ -998,11 +1095,8 @@ func(addi * Addi) Print() {
 type Subi struct { InstructionFormatF }
 
 func (subi *Subi) Execute() {
-    x := uint64(subi.RX.Get())
-    y := uint64(subi.I16s())
-    R := x - y
-
-    subi.LS, subi.MS = uint32(R),  uint32(R >> 32)
+    comp_2 := ^subi.I16s() + 1
+    subi.LS, subi.MS = bits.Add32(subi.RX.Get(), comp_2, 0)
 }
 
 func (subi *Subi) Status() {
@@ -1159,31 +1253,454 @@ func(modi * Modi) Print() {
     write(code, execution)
 }
 
-// type Cmp struct { InstructionFormatF }
+type Cmpi struct { InstructionFormatF }
 
-// func (cmp *Cmp) Execute() {
-//     cmp.LS, cmp.MS = bits.Sub32(cmp.RX.Get(), cmp.RY.Get(), 0)
-// }
 
-// func (cmp *Cmp) Status() {
-//     SR.ZN(cmp.LS == 0)
+func (cmpi *Cmpi) Execute() {
+    x := int64(cmpi.RX.Get())
+    y := int64(cmpi.I16s())
+    R := x - y
 
-//     SR.SN((cmp.LS >> 31) == 1)
+    cmpi.LS, cmpi.MS = uint32(R),  uint32(R >> 32)
+}
 
-//     SR.CY(cmp.MS == 1)
+func (cmpi *Cmpi) Status() {
+    SR.ZN(cmpi.LS == 0)
 
-//     SR.OV((cmp.RX.Get() >> 31) != (cmp.RY.Get() >> 31) &&
-//    (cmp.LS >> 31) != (cmp.RX.Get()))
-// }
+    SR.SN((cmpi.LS >> 31) == 1)
 
-// func (cmp *Cmp) Store() {}
+    SR.CY(cmpi.MS != 0)
 
-// func(cmp * Cmp) Print() {
-//     execution := fmt.Sprintf("SR=0x%08X", SR.Get())
-//     code := fmt.Sprintf("cmp r%d,r%d", cmp.X(), cmp.Y())
+    SR.OV((cmpi.RX.Get() >> 31) != (cmpi.I16s() >> 31) &&
+   (cmpi.LS >> 31) != (cmpi.RX.Get()))
+}
 
-//     write(code, execution)
-// }
+func (cmpi *Cmpi) Store() {}
+
+func(cmpi * Cmpi) Print() {
+    execution := fmt.Sprintf("SR=0x%08X", SR.Get())
+    code := fmt.Sprintf("cmpi r%d,%d", cmpi.X(), cmpi.I16s())
+
+    write(code, execution)
+}
+
+type L8 struct { InstructionFormatF }
+
+func (l8 *L8) Execute() {
+    l8.LS = l8.RX.Get() + l8.I16s()
+}
+
+func (l8 *L8) Status() {}
+
+func (l8 *L8) Store() {
+    l8.RZ.Set(uint32(Load8(l8.LS)))
+}
+
+func(l8 * L8) Print() {
+    execution := fmt.Sprintf("R%d=MEM[0x%08X]=0x%02X",l8.Z(),l8.LS, l8.RZ.Get())
+    code := fmt.Sprintf("l8 r%d,[r%d+%d]", l8.Z(), l8.X(), l8.I16s())
+
+    write(code, execution)
+}
+
+type L16 struct { InstructionFormatF }
+
+func (l16 *L16) Execute() {
+    l16.LS = l16.RX.Get() + l16.I16s()
+}
+
+func (l16 *L16) Status() {}
+
+func (l16 *L16) Store() {
+    l16.RZ.Set(uint32(Load16(l16.LS)))
+}
+
+func(l16 * L16) Print() {
+    execution := fmt.Sprintf("R%d=MEM[0x%08X]=0x%04X",l16.Z(),l16.LS, l16.RZ.Get())
+    code := fmt.Sprintf("l16 r%d,[r%d+%d]", l16.Z(), l16.X(), l16.I16s())
+
+    write(code, execution)
+}
+
+type L32 struct { InstructionFormatF }
+
+func (l32 *L32) Execute() {
+    l32.LS = l32.RX.Get() + l32.I16s()
+}
+
+func (l32 *L32) Status() {}
+
+func (l32 *L32) Store() {
+    l32.RZ.Set(Load32(l32.LS))
+}
+
+func(l32 * L32) Print() {
+    execution := fmt.Sprintf("R%d=MEM[0x%08X]=0x%08X",l32.Z(),l32.LS, l32.RZ.Get())
+    code := fmt.Sprintf("l32 r%d,[r%d+%d]", l32.Z(), l32.X(), l32.I16s())
+
+    write(code, execution)
+}
+
+type S8 struct { InstructionFormatF }
+
+func (s8 *S8) Execute() {
+    s8.LS = s8.RX.Get() + s8.I16s()
+}
+
+func (s8 *S8) Status() {}
+
+func (s8 *S8) Store() {
+    Store8(s8.LS, uint8(s8.RZ.Get()))
+}
+
+func(s8 * S8) Print() {
+    execution := fmt.Sprintf("MEM[0x%08X]=R%d=0x%02X",s8.LS, s8.Z(), uint8(s8.RZ.Get()))
+    code := fmt.Sprintf("s8 [r%d+%d],r%d", s8.X(), s8.I16s(), s8.Z())
+
+    write(code, execution)
+}
+
+type S16 struct { InstructionFormatF }
+
+func (s16 *S16) Execute() {
+    s16.LS = s16.RX.Get() + s16.I16s()
+}
+
+func (s16 *S16) Status() {}
+
+func (s16 *S16) Store() {
+    Store16(s16.LS, uint16(s16.RZ.Get()))
+}
+
+func(s16 * S16) Print() {
+    execution := fmt.Sprintf("MEM[0x%08X]=R%d=0x%04X",s16.LS, s16.Z(), uint16(s16.RZ.Get()))
+    code := fmt.Sprintf("s16 [r%d+%d],r%d", s16.X(), s16.I16s(), s16.Z())
+
+    write(code, execution)
+}
+
+type S32 struct { InstructionFormatF }
+
+func (s32 *S32) Execute() {
+    s32.LS = s32.RX.Get() + s32.I16s()
+}
+
+func (s32 *S32) Status() {}
+
+func (s32 *S32) Store() {
+    Store32(s32.LS, uint32(s32.RZ.Get()))
+}
+
+func(s32 * S32) Print() {
+    execution := fmt.Sprintf("MEM[0x%08X]=R%d=0x%08X",s32.LS, s32.Z(), uint32(s32.RZ.Get()))
+    code := fmt.Sprintf("s32 [r%d+%d],r%d", s32.X(), s32.I16s(), s32.Z())
+
+    write(code, execution)
+}
+
+type Bae struct { InstructionFormatS }
+
+func (bae *Bae) Execute() {
+    if !SR.Get_CY() {
+	bae.Jump()
+    }
+}
+
+func (bae *Bae) Status() {}
+
+func (bae *Bae) Store() {}
+
+func(bae *Bae) Print() {
+    execution := fmt.Sprintf("PC=0x%08X", bae.NAD)
+    code := fmt.Sprintf("bae %d", bae.I26s())
+
+    write(code, execution)
+}
+
+type Bat struct { InstructionFormatS }
+
+func (bat *Bat) Execute() {
+    if !(SR.Get_ZN() || SR.Get_CY()) {
+	bat.Jump()
+    }
+}
+
+func (bat *Bat) Status() {}
+
+func (bat *Bat) Store() {}
+
+func(bat *Bat) Print() {
+    execution := fmt.Sprintf("PC=0x%08X", bat.NAD)
+    code := fmt.Sprintf("bat %d", bat.I26s())
+
+    write(code, execution)
+}
+
+type Bbe struct { InstructionFormatS }
+
+func (bbe *Bbe) Execute() {
+    if SR.Get_ZN() || SR.Get_CY() {
+	bbe.Jump()
+    }
+}
+
+func (bbe *Bbe) Status() {}
+
+func (bbe *Bbe) Store() {}
+
+func(bbe *Bbe) Print() {
+    execution := fmt.Sprintf("PC=0x%08X", bbe.NAD)
+    code := fmt.Sprintf("bbe %d", bbe.I26s())
+
+    write(code, execution)
+}
+
+type Bbt struct { InstructionFormatS }
+
+func (bbt *Bbt) Execute() {
+    if SR.Get_CY() {
+	bbt.Jump()
+    }
+}
+
+func (bbt *Bbt) Status() {}
+
+func (bbt *Bbt) Store() {}
+
+func(bbt *Bbt) Print() {
+    execution := fmt.Sprintf("PC=0x%08X", bbt.NAD)
+    code := fmt.Sprintf("bbt %d", bbt.I26s())
+
+    write(code, execution)
+}
+
+type Beq struct { InstructionFormatS }
+
+func (beq *Beq) Execute() {
+    if SR.Get_ZN() {
+	beq.Jump()
+    }
+}
+
+func (beq *Beq) Status() {}
+
+func (beq *Beq) Store() {}
+
+func(beq *Beq) Print() {
+    execution := fmt.Sprintf("PC=0x%08X", beq.NAD)
+    code := fmt.Sprintf("beq %d", beq.I26s())
+
+    write(code, execution)
+}
+
+type Bge struct { InstructionFormatS }
+
+func (bge *Bge) Execute() {
+    if SR.Get_SN() == SR.Get_OV() {
+	bge.Jump()
+    }
+}
+
+func (bge *Bge) Status() {}
+
+func (bge *Bge) Store() {}
+
+func(bge *Bge) Print() {
+    execution := fmt.Sprintf("PC=0x%08X", bge.NAD)
+    code := fmt.Sprintf("bge %d", bge.I26s())
+
+    write(code, execution)
+}
+
+type Bgt struct { InstructionFormatS }
+
+func (bgt *Bgt) Execute() {
+    if !SR.Get_ZN() && SR.Get_SN() == SR.Get_OV() {
+	bgt.Jump()
+    }
+}
+
+func (bgt *Bgt) Status() {}
+
+func (bgt *Bgt) Store() {}
+
+func(bgt *Bgt) Print() {
+    execution := fmt.Sprintf("PC=0x%08X", bgt.NAD)
+    code := fmt.Sprintf("bgt %d", bgt.I26s())
+
+    write(code, execution)
+}
+
+type Biv struct { InstructionFormatS }
+
+func (biv *Biv) Execute() {
+    biv.Jump()
+}
+
+func (biv *Biv) Status() {}
+
+func (biv *Biv) Store() {}
+
+func(biv *Biv) Print() {
+    execution := fmt.Sprintf("PC=0x%08X", biv.NAD)
+    code := fmt.Sprintf("biv %d", biv.I26s())
+
+    write(code, execution)
+}
+
+type Ble struct { InstructionFormatS }
+
+func (ble *Ble) Execute() {
+    if SR.Get_ZN() && SR.Get_SN() != SR.Get_OV() {
+	ble.Jump()
+    }
+}
+
+func (ble *Ble) Status() {}
+
+func (ble *Ble) Store() {}
+
+func(ble *Ble) Print() {
+    execution := fmt.Sprintf("PC=0x%08X", ble.NAD)
+    code := fmt.Sprintf("ble %d", ble.I26s())
+
+    write(code, execution)
+}
+
+
+type Blt struct { InstructionFormatS }
+
+func (blt *Blt) Execute() {
+    if SR.Get_SN() != SR.Get_OV() {
+	blt.Jump()
+    }
+}
+
+func (blt *Blt) Status() {}
+
+func (blt *Blt) Store() {}
+
+func(blt *Blt) Print() {
+    execution := fmt.Sprintf("PC=0x%08X", blt.NAD)
+    code := fmt.Sprintf("blt %d", blt.I26s())
+
+    write(code, execution)
+}
+
+type Bne struct { InstructionFormatS }
+
+func (bne *Bne) Execute() {
+    if !SR.Get_ZN() {
+	bne.Jump()
+    }
+}
+
+func (bne *Bne) Status() {}
+
+func (bne *Bne) Store() {}
+
+func(bne *Bne) Print() {
+    execution := fmt.Sprintf("PC=0x%08X", bne.NAD)
+    code := fmt.Sprintf("bne %d", bne.I26s())
+
+    write(code, execution)
+}
+
+type Bni struct { InstructionFormatS }
+
+func (bni *Bni) Execute() {
+    if false { // FIX: Missing definition field IV
+	bni.Jump()
+    }
+}
+
+func (bni *Bni) Status() {}
+
+func (bni *Bni) Store() {}
+
+func(bni *Bni) Print() {
+    execution := fmt.Sprintf("PC=0x%08X", bni.NAD)
+    code := fmt.Sprintf("bni %d", bni.I26s())
+
+    write(code, execution)
+}
+
+type Bnz struct { InstructionFormatS }
+
+func (bnz *Bnz) Execute() {
+    if !SR.Get_ZD() { // FIX: Missing definition field IV
+	bnz.Jump()
+    }
+}
+
+func (bnz *Bnz) Status() {}
+
+func (bnz *Bnz) Store() {}
+
+func(bnz *Bnz) Print() {
+    execution := fmt.Sprintf("PC=0x%08X", bnz.NAD)
+    code := fmt.Sprintf("bnz %d", bnz.I26s())
+
+    write(code, execution)
+}
+
+type Bun struct { InstructionFormatS }
+
+func (bun *Bun) Execute() {
+    bun.Jump()
+}
+
+func (bun *Bun) Status() {}
+
+func (bun *Bun) Store() {}
+
+func(bun *Bun) Print() {
+    execution := fmt.Sprintf("PC=0x%08X", bun.NAD)
+    code := fmt.Sprintf("bun %d", bun.I26s())
+
+    write(code, execution)
+}
+
+type Bzd struct { InstructionFormatS }
+
+func (bzd *Bzd) Execute() {
+    if SR.Get_ZD() {
+	bzd.Jump()
+    }
+}
+
+func (bzd *Bzd) Status() {}
+
+func (bzd *Bzd) Store() {}
+
+func(bzd *Bzd) Print() {
+    execution := fmt.Sprintf("PC=0x%08X", bzd.NAD)
+    code := fmt.Sprintf("bzd %d", bzd.I26s())
+
+    write(code, execution)
+}
+
+type Int struct { InstructionFormatS }
+
+func (int *Int) Execute() {
+    if int.I16() == 0 {
+        int.NAD = 0
+    }
+}
+
+func (int *Int) Shutdown() bool {
+    return int.I16() == 0
+}
+func (int *Int) Status() {}
+
+func (int *Int) Store() {}
+
+func(int *Int) Print() {
+    execution := fmt.Sprintf("CR=0x%08X,PC=0x%08X", 0, int.NAD) // FIX: missing definition for register CR
+    code := fmt.Sprintf("int %d", int.I26())
+
+    write(code, execution)
+}
 
 // Store 32 bits from memory
 func Store32(address uint32 , Data uint32) {
@@ -1223,10 +1740,6 @@ func Load16(address uint32) uint16 {
 // Load 8 bits from memory
 func Load8(adress uint32) (Data uint8){
     return MEM[adress]
-}
-
-func bun(count uint32) {
-    PC.data *= count
 }
 
 func NewRegister(register_type string) Registers {
@@ -1312,9 +1825,8 @@ func main() {
 
     R[0].Set(0)
 
-    for i := 0; i < 23; i++ {
+    for {
 	IR.Load()
-	PC.data += 1
 
 	// FIX: case for NOP instruction
 	// FIX: case for invalid instruction
@@ -1329,6 +1841,22 @@ func main() {
 	exececutable.Store()
 
 	exececutable.Print()
+
+	executableFormatS, ok := exececutable.(ExecutableFormatS)
+
+	if ok {
+	    executableFormatS.PC()
+	} else {
+	    PC.data += 4
+	}
+
+	exececutableInt, ok := exececutable.(*Int)
+
+	if ok {
+	    if exececutableInt.Shutdown() {
+	        break
+	    }
+	} 
     }
 
     fmt.Println("[END OF SIMULATION]");
