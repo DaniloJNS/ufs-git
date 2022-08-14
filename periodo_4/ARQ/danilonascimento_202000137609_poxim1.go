@@ -106,7 +106,7 @@ type Executable interface {
     Print()
 }
 
-type ExecutableFormatS interface {
+type ExecutableFormatSubRoutine interface {
     Executable
     PC()
 }
@@ -653,8 +653,8 @@ func (collection *InstructionCollection) Get() Executable {
 
 	    SR.CY(add.MS != 0)
 
-	    SR.OV((add.RX.Get() >> 31) == (add.RY.Get() >> 31) &&
-		  (add.LS >> 31) != (add.RX.Get()))
+	    SR.OV(add.RX.Get() >> 31 == add.RY.Get() >> 31 &&
+		  add.LS >> 31 != add.RX.Get() >> 31)
 	}
 
 	func (add *Add) Store() {
@@ -773,7 +773,7 @@ func (muls *Muls) Execute() {
 func (muls *Muls) Mul32(x, y uint32) (uint32, uint32) {
     var tmp int64
 
-    tmp = int64(x) * int64(y)
+    tmp = int64(int32(x) * int32(y))
 
     return uint32(tmp>>32), uint32(tmp)
 }
@@ -853,26 +853,26 @@ func (div *Div) Status() {
 }
 
 func (div *Div) Store() {
-    if SR.Get() != uint32(0x00000060){
+    if div.RY.Get() != uint32(0x00000000) {
 	div.RI.Set(div.MS)
 	div.RZ.Set(div.LS)
     }
 }
 
 func(div * Div) Print() {
-    var execution string
-    var mod, quo uint32 
+    // var mod, quo uint32 
+    var mod uint32 
 
     if SR.Get() != uint32(0x00000060){
 	mod = div.RI.Get()
-	quo = div.RZ.Get()
+	// quo = div.RZ.Get()
     } else {
 	mod = div.MS
-	quo = div.LS
+	// quo = div.LS
     }
 
-    execution = fmt.Sprintf("%s=%s%%%s=0x%08X,%s=%s/%s=0x%08X,SR=0x%08X",
-			      div.RI.UID(), div.RX.UID(), div.RY.UID(), mod, div.RZ.UID(), div.RX.UID(), div.RY.UID(), quo, SR.Get())
+    execution := fmt.Sprintf("%s=%s%%%s=0x%08X,%s=%s/%s=0x%08X,SR=0x%08X",
+			      div.RI.UID(), div.RX.UID(), div.RY.UID(), mod, div.RZ.UID(), div.RX.UID(), div.RY.UID(), div.RZ.Get(), SR.Get())
 
     code := fmt.Sprintf("div %s,%s,%s,%s", div.RI.ID(),  div.RZ.ID(), div.RX.ID(), div.RY.ID())
 
@@ -945,7 +945,7 @@ func (div *Divs) Status() {
 }
 
 func (divs *Divs) Store() {
-    if SR.Get() != uint32(0x00000060){
+    if divs.RY.Get() != uint32(0x00000000) {
 	divs.RI.Set(divs.MS)
 	divs.RZ.Set(divs.LS)
     }
@@ -990,7 +990,7 @@ func (sra *Sra) slr32() (uint32, uint32) {
 func (sra *Sra) Status() {
     SR.ZN(sra.MS == 0 && sra.LS == 0)
 
-    SR.CY(sra.MS != 0)
+    SR.OV(sra.MS != 0)
 }
 
 func (sra *Sra) Store() {
@@ -1009,11 +1009,12 @@ func(sra * Sra) Print() {
 type Cmp struct { InstructionFormatU }
 
 func (cmp *Cmp) Execute() {
-    x := int64(cmp.RX.Get())
-    y := int64(cmp.RY.Get())
-    R := x - y
+    cmp.LS, cmp.MS = bits.Sub32(cmp.RX.Get(), cmp.RY.Get(), 0)
+    // x := int64(cmp.RX.Get())
+    // y := int64(cmp.RY.Get())
+    // R := x - y
 
-    cmp.LS, cmp.MS = uint32(R),  uint32(R >> 32)
+    // cmp.LS, cmp.MS = uint32(R),  uint32(R >> 32)
 }
 
 func (cmp *Cmp) Status() {
@@ -1024,7 +1025,7 @@ func (cmp *Cmp) Status() {
     SR.CY(cmp.MS != 0)
 
     SR.OV((cmp.RX.Get() >> 31) != (cmp.RY.Get() >> 31) &&
-   (cmp.LS >> 31) != (cmp.RX.Get()))
+   (cmp.LS >> 31) != (cmp.RX.Get() >> 31))
 }
 
 func (cmp *Cmp) Store() {}
@@ -1131,10 +1132,11 @@ func(xor * Xor) Print() {
 type Push struct { InstructionFormatUforSubRoutine }
 
 func (push *Push) Execute() {
+    push.LS = SP.data
     push.add(push.V5())
     push.add(push.I5())
-    push.add(push.Y())
     push.add(push.X())
+    push.add(push.Y())
     push.add(push.Z())
 }
 
@@ -1144,7 +1146,6 @@ func (push *Push) add(indice uint32) {
 
 	Store32(SP.data / 4, register.Get())
 
-	push.LS = SP.data
 	SP.data -= uint32(0x00000004)
 
 	push.append(register)
@@ -1160,6 +1161,8 @@ func(push * Push) Print() {
     registers_uid := strings.Join(push.uids, ",")
     registers_value := strings.Join(push.values, ",")
 
+    if len(registers_id) == 0 { registers_id = "-" }
+
     execution := fmt.Sprintf("MEM[0x%08X]{%s}={%s}", push.LS, registers_value, registers_uid)
     code := fmt.Sprintf("push %s", registers_id)
 
@@ -1169,10 +1172,11 @@ func(push * Push) Print() {
 type Pop struct { InstructionFormatUforSubRoutine }
 
 func (pop *Pop) Execute() {
+    pop.LS = SP.data
     pop.add(pop.V5())
     pop.add(pop.I5())
-    pop.add(pop.Y())
     pop.add(pop.X())
+    pop.add(pop.Y())
     pop.add(pop.Z())
 }
 
@@ -1183,8 +1187,6 @@ func (pop *Pop) add(indice uint32) {
 	SP.data += uint32(0x00000004)
 
 	register.Set(Load32(SP.data / 4))
-
-	pop.LS = SP.data
 
 	pop.append(register)
     }
@@ -1199,8 +1201,10 @@ func(pop * Pop) Print() {
     registers_uid := strings.Join(pop.uids, ",")
     registers_value := strings.Join(pop.values, ",")
 
-    execution := fmt.Sprintf("MEM[0x%08X]{%s}={%s}", pop.LS, registers_value, registers_uid)
-    code := fmt.Sprintf("push %s", registers_id)
+    if len(registers_id) == 0 { registers_id = "-" }
+
+    execution := fmt.Sprintf("{%s}=MEM[0x%08X]{%s}", registers_uid, pop.LS, registers_value)
+    code := fmt.Sprintf("pop %s", registers_id)
 
     write(code, execution)
 }
@@ -1217,7 +1221,7 @@ func (addi *Addi) Status() {
 
     SR.SN((addi.LS >> 31) == 1)
 
-    SR.CY(addi.MS != 0)
+    SR.CY(addi.MS == 1)
 
     SR.OV((addi.RX.Get() >> 31) == (addi.I16s() >> 31) &&
 	  (addi.LS >> 31) != (addi.RX.Get()))
@@ -1237,8 +1241,9 @@ func(addi * Addi) Print() {
 type Subi struct { InstructionFormatF }
 
 func (subi *Subi) Execute() {
-    comp_2 := ^subi.I16s() + 1
-    subi.LS, subi.MS = bits.Add32(subi.RX.Get(), comp_2, 0)
+    // comp_2 := ^subi.I16s() + 1
+    // subi.LS, subi.MS = bits.Add32(subi.RX.Get(), comp_2, 0)
+    subi.LS, subi.MS = bits.Sub32(subi.RX.Get(), subi.I16s(), 0)
 }
 
 func (subi *Subi) Status() {
@@ -1271,7 +1276,7 @@ func (muli *Muli) Execute() {
 }
 
 func (muli *Muli) Mul32(x, y uint32) (uint32, uint32) {
-    tmp := int64(x) * int64(y)
+    tmp := int64(int32(x) * int32(y))
 
     return uint32(tmp>>32), uint32(tmp)
 }
@@ -1288,7 +1293,7 @@ func (muli *Muli) Store() {
 
 func(muli * Muli) Print() {
     execution := fmt.Sprintf("%s=%s*0x%08X=0x%08X,SR=0x%08X", muli.RZ.UID(), muli.RX.UID(), muli.I16s(), muli.RZ.Get(), SR.Get())
-    code := fmt.Sprintf("muli %s,%s,%d", muli.RZ.ID(), muli.RX.ID(), muli.I16s())
+    code := fmt.Sprintf("muli %s,%s,%d", muli.RZ.ID(), muli.RX.ID(), int32(muli.I16s()))
 
     write(code, execution)
 }
@@ -1321,24 +1326,24 @@ func (divi *Divi) Status() {
 }
 
 func (divi *Divi) Store() {
-    if SR.Get() != uint32(0x00000060){
+    if divi.I16s() != uint32(0x00000000) {
 	divi.RZ.Set(divi.LS)
     }
 }
 
 func(divi * Divi) Print() {
     var execution string
-    var quo uint32 
+    // var quo uint32 
 
-    if SR.Get() != uint32(0x00000060){
-	quo = divi.RZ.Get()
-    } else {
-	quo = divi.LS
-    }
+    // if SR.Get() != uint32(0x00000060){
+	// quo = divi.RZ.Get()
+    // } else {
+	// quo = divi.LS
+    // }
 
-    execution = fmt.Sprintf("%s=%s/0x%08X=0x%08X,SR=0x%08X", divi.RZ.UID(), divi.RX.UID(), divi.I16s(), quo, SR.Get())
+    execution = fmt.Sprintf("%s=%s/0x%08X=0x%08X,SR=0x%08X", divi.RZ.UID(), divi.RX.UID(), divi.I16s(), divi.RZ.Get(), SR.Get())
 
-    code := fmt.Sprintf("divi %s,%s,%d", divi.RZ.ID(), divi.RX.ID(), divi.I16s())
+    code := fmt.Sprintf("divi %s,%s,%d", divi.RZ.ID(), divi.RX.ID(), int32(divi.I16s()))
 
     write(code, execution)
 }
@@ -1388,7 +1393,7 @@ func(modi * Modi) Print() {
 
     execution = fmt.Sprintf("%s=%s%%0x%08X=0x%08X,SR=0x%08X", modi.RZ.UID(), modi.RX.UID(), modi.I16s(), quo, SR.Get())
 
-    code := fmt.Sprintf("modi %s,%s,%d", modi.RZ.ID(), modi.RX.ID(), modi.I16s())
+    code := fmt.Sprintf("modi %s,%s,%d", modi.RZ.ID(), modi.RX.ID(), int32(modi.I16s()))
 
     write(code, execution)
 }
@@ -1397,11 +1402,12 @@ type Cmpi struct { InstructionFormatF }
 
 
 func (cmpi *Cmpi) Execute() {
-    x := int64(cmpi.RX.Get())
-    y := int64(cmpi.I16s())
-    R := x - y
+    cmpi.LS, cmpi.MS = bits.Sub32(cmpi.RX.Get(), cmpi.I16s(), 0)
+    // x := uint32(cmpi.RX.Get())
+    // y := uint32(cmpi.I16s())
+    // R = int64(x - y)
 
-    cmpi.LS, cmpi.MS = uint32(R),  uint32(R >> 32)
+    // cmpi.LS, cmpi.MS = uint32(R),  uint32(R >> 32)
 }
 
 func (cmpi *Cmpi) Status() {
@@ -1409,17 +1415,17 @@ func (cmpi *Cmpi) Status() {
 
     SR.SN((cmpi.LS >> 31) == 1)
 
-    SR.CY(cmpi.MS != 0)
+    SR.CY(cmpi.MS == 1)
 
     SR.OV((cmpi.RX.Get() >> 31) != (cmpi.I16s() >> 31) &&
-   (cmpi.LS >> 31) != (cmpi.RX.Get()))
+   (cmpi.LS >> 31) != (cmpi.RX.Get() >> 31))
 }
 
 func (cmpi *Cmpi) Store() {}
 
 func(cmpi * Cmpi) Print() {
     execution := fmt.Sprintf("SR=0x%08X", SR.Get())
-    code := fmt.Sprintf("cmpi %s,%d", cmpi.RX.ID(), cmpi.I16s())
+    code := fmt.Sprintf("cmpi %s,%d", cmpi.RX.ID(), int32(cmpi.I16s()))
 
     write(code, execution)
 }
@@ -1548,14 +1554,17 @@ func (call *Call) Execute() {
 
 func (call *Call) Status() {}
 
-func (call *Call) Store() {
-    Store32(call.LS, SP.data / 4)
-    SP.data -= uint32(0x00000004)
+func (call *Call) PC() {
     PC.data = call.MS
 }
 
+func (call *Call) Store() {
+    Store32(SP.data / 4, call.LS)
+    SP.data -= uint32(0x00000004)
+}
+
 func(call * Call) Print() {
-    execution := fmt.Sprintf("PC=0x%08X,MEM[0x%08X]=0x%08X",PC.data, SP.data + 4, call.LS)
+    execution := fmt.Sprintf("PC=0x%08X,MEM[0x%08X]=0x%08X", call.MS, SP.data + 4, call.LS)
     code := fmt.Sprintf("call [%s%s%d]", call.RX.ID(), call.Signal_OP(), call.I16s())
 
     write(code, execution)
@@ -1575,7 +1584,7 @@ func (ret *Ret) PC() {
 }
 
 func (ret *Ret) Store() {
-    SP.data += uint32(0x00000004)
+    SP.data = ret.LS
 }
 
 func(ret * Ret) Print() {
@@ -1721,7 +1730,10 @@ func(bgt *Bgt) Print() {
 type Biv struct { InstructionFormatS }
 
 func (biv *Biv) Execute() {
-    biv.Jump()
+    if SR.Get_IV() {
+	biv.Jump()
+        
+    }
 }
 
 func (biv *Biv) Status() {}
@@ -1738,7 +1750,7 @@ func(biv *Biv) Print() {
 type Ble struct { InstructionFormatS }
 
 func (ble *Ble) Execute() {
-    if SR.Get_ZN() && SR.Get_SN() != SR.Get_OV() {
+    if SR.Get_ZN() || SR.Get_SN() != SR.Get_OV() {
 	ble.Jump()
     }
 }
@@ -1796,7 +1808,7 @@ func(bne *Bne) Print() {
 type Bni struct { InstructionFormatS }
 
 func (bni *Bni) Execute() {
-    if false { // FIX: Missing definition field IV
+    if !SR.Get_IV() { // FIX: Missing definition field IV
 	bni.Jump()
     }
 }
@@ -2036,11 +2048,12 @@ func main() {
 
     INSTRUCTION.New()
     INSTRUCTION.Setup()
+
     fmt.Println("[START OF SIMULATION]");
 
     R[0].Set(0)
 
-    for i:{
+    for {
 	IR.Load()
 
 	if IR.NOP() {
@@ -2058,25 +2071,11 @@ func main() {
 
 	exececutable.Execute()
 
-	exececutable.Status()
-
 	exececutable.Store()
 
+	exececutable.Status()
+
 	exececutable.Print()
-
-	executableFormatS, ok := exececutable.(ExecutableFormatS)
-
-	if ok {
-	    executableFormatS.PC()
-	    continue
-	} 
-
-	executableRet, ok := exececutable.(*Ret)
-
-	if ok {
-	    executableRet.PC()
-	    continue
-	} 
 
 	exececutableInt, ok := exececutable.(*Int)
 
@@ -2084,6 +2083,14 @@ func main() {
 	    if exececutableInt.Shutdown() {
 	        break
 	    }
+	}
+
+	executableFormatS, ok := exececutable.(ExecutableFormatSubRoutine)
+
+	if ok {
+	    executableFormatS.PC()
+
+	    continue
 	} 
 
 	PC.data += 4
