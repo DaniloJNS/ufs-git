@@ -59,6 +59,17 @@ var (
     PC *ProgramCounter
 
     /*
+        Interruption Program Counter (IPC): Store the instruction address where the interruption was generated or caused
+
+	    31                                              0
+	     ┌──────────────────────────────────────────────┐
+	     │              INSTRUCTION ADDRESS             │
+	     └──────────────────────────────────────────────┘
+	     R27 = IPC
+    */
+    IPC *InterruptionProgramCounter
+
+    /*
 	Instruction Register (IR): stores the instruction loaded from memory and executed
 
 	    31                                              0
@@ -69,14 +80,27 @@ var (
     */
     IR *InstructionRegister
 
+    /*
+        Claim Register (CR): Store the identifier code of hardware and software functions
+
+	    31                                              0
+	     ┌──────────────────────────────────────────────┐
+	     │              IDENTIFIER CODE                 │
+	     └──────────────────────────────────────────────┘
+	     R26 = PC
+    */
+    CR *ClaimRegister
+
     STATUS uint32
 )
 
 const (
-     I_SR = 31
-     I_SP = 30
-     I_PC = 29
-     I_IR = 28
+     I_SR  = 31
+     I_SP  = 30
+     I_PC  = 29
+     I_IR  = 28
+     I_IPC = 27
+     I_CR  = 26
 
      OP            = uint32(0xFC000000)
      SubCode       = uint32(0x00000700)
@@ -157,6 +181,17 @@ type ExecutableFormatSubRoutine interface {
 
     // Especific Set for blocked write in register
 	func (register *ReadOnlyRegister) Set(val uint32) {}
+
+    // {{{ Interruption Program Counter (IPC): Store the instruction address where the interruption was generated or caused
+	type InterruptionProgramCounter struct {
+	    Register
+	}
+    // }}} 
+    // {{{ Claim Register (CR): Store the identifier code of hardware and software functions
+	type ClaimRegister struct {
+	    Register
+	}
+    // }}} 
 
     // {{{ Program counter (PC): Controls the flow of program execution, pointing to the instructions
 	type ProgramCounter struct {
@@ -240,6 +275,19 @@ type ExecutableFormatSubRoutine interface {
 
 	    func (SR *StatusRegister) Get_IV() bool {
 		ZN :=  (SR.Get() >> 2) & uint32(0x00000001)
+		return ZN == uint32(0x00000001)
+	    }
+
+	// IE (interruption control): 
+	// Not affect unmaskable instruction
+	    func (SR *StatusRegister) IE(set bool) {
+		bit :=  convertBool(set) << 1
+		resetBit:= uint32(0x000000001) << 1
+		SR.Set((SR.Get() & ^resetBit) | bit)
+	    }
+
+	    func (SR *StatusRegister) Get_IE() bool {
+		ZN :=  (SR.Get() >> 1) & uint32(0x00000001)
 		return ZN == uint32(0x00000001)
 	    }
 
@@ -1977,6 +2025,8 @@ func NewRegister(args varArgs) Registers {
 	case "IR":		 register = &InstructionRegister{Register: register_base}
 	case "SP":		 register = &StackPointer{Register: register_base}
 	case "PC":		 register = &ProgramCounter{Register: register_base}
+	case "IPC":		 register = &InterruptionProgramCounter{Register: register_base}
+	case "CR":		 register = &ClaimRegister{Register: register_base}
     }
     
     return register
@@ -1990,10 +2040,12 @@ func Setup_registers() {
 	R[i] = NewRegister(varArgs{ "register_type": "GeneralRegister", "id": id })
     }
 
-    R[I_SR] = NewRegister(varArgs{ "register_type": "SR", "id": "sr" })
-    R[I_PC] = NewRegister(varArgs{ "register_type": "PC", "id": "pc" })
-    R[I_IR] = NewRegister(varArgs{ "register_type": "IR", "id": "ir" })
-    R[I_SP] = NewRegister(varArgs{ "register_type": "SP", "id": "sp" })
+    R[I_SR] =  NewRegister(varArgs{ "register_type":  "SR",  "id": "sr" })
+    R[I_PC] =  NewRegister(varArgs{ "register_type":  "PC",  "id": "pc" })
+    R[I_IR] =  NewRegister(varArgs{ "register_type":  "IR",  "id": "ir" })
+    R[I_SP] =  NewRegister(varArgs{ "register_type":  "SP",  "id": "sp" })
+    R[I_IPC] = NewRegister(varArgs{ "register_type": "IPC", "id": "ipc" })
+    R[I_CR] =  NewRegister(varArgs{ "register_type":  "CR",  "id": "cr" })
 
     SR = R[I_SR].(*StatusRegister)
 
@@ -2002,6 +2054,10 @@ func Setup_registers() {
     PC = R[I_PC].(*ProgramCounter)
 
     IR = R[I_IR].(*InstructionRegister)
+
+    IPC = R[I_IPC].(*InterruptionProgramCounter)
+
+    CR = R[I_CR].(*ClaimRegister)
 }
 
 // Store in memory full instruction of file
@@ -2051,6 +2107,7 @@ func main() {
 
     fmt.Println("[START OF SIMULATION]");
 
+
     R[0].Set(0)
 
     for {
@@ -2060,24 +2117,24 @@ func main() {
 	    continue
 	}
 
-	exececutable := INSTRUCTION.Get()
+	executable := INSTRUCTION.Get()
 
-	if exececutable == nil {
+	if executable == nil {
 	    fmt.Printf("[INVALID INSTRUCTION @ 0x%08X]\n", IR.Get())
 	    break
 	}
 
-	exececutable.New()
+	executable.New()
 
-	exececutable.Execute()
+	executable.Execute()
 
-	exececutable.Store()
+	executable.Store()
 
-	exececutable.Status()
+	executable.Status()
 
-	exececutable.Print()
+	executable.Print()
 
-	exececutableInt, ok := exececutable.(*Int)
+	executableInt, ok := executable.(*Int)
 
 	if ok {
 	    if exececutableInt.Shutdown() {
@@ -2085,7 +2142,7 @@ func main() {
 	    }
 	}
 
-	executableFormatS, ok := exececutable.(ExecutableFormatSubRoutine)
+	executableFormatS, ok := executable.(ExecutableFormatSubRoutine)
 
 	if ok {
 	    executableFormatS.PC()
