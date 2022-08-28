@@ -2137,7 +2137,7 @@ func main() {
 	executableInt, ok := executable.(*Int)
 
 	if ok {
-	    if exececutableInt.Shutdown() {
+	    if executableInt.Shutdown() {
 	        break
 	    }
 	}

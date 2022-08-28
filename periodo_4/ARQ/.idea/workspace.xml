@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="ce75a70d-00dc-4569-8530-ccde14cb1b25" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/1_project.hex" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/1_project.out" beforeDir="false" afterPath="$PROJECT_DIR$/1_project.out" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/main.go" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../POO/unidade_1/project/clock/DoisDigitos.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../POO/unidade_1/project/clock/DoisDigitos.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../POO/unidade_1/project/clock/Main.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../POO/unidade_1/project/clock/RelogioDigital.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../POO/unidade_1/project/clock/RelogioDigital.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../POO/unidade_1/project/clock/main.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../POO/unidade_1/project/clock/main.java" beforeDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/../.." />
+  </component>
+  <component name="GoLibraries">
+    <option name="indexEntireGoPath" value="true" />
+  </component>
+  <component name="MarkdownSettingsMigration">
+    <option name="stateVersion" value="1" />
+  </component>
+  <component name="OptimizeOnSaveOptions">
+    <option name="myRunOnSave" value="true" />
+    <option name="myAllFileTypesSelected" value="false" />
+    <option name="mySelectedFileTypes">
+      <set>
+        <option value="Go" />
+      </set>
+    </option>
+  </component>
+  <component name="ProjectId" id="2DrL171SLUCA2ow4ZmGKnZrRonp" />
+  <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.formatter.settings.were.checked&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.migrated.go.modules.settings&quot;: &quot;true&quot;,
+    &quot;WebServerToolWindowFactoryState&quot;: &quot;false&quot;,
+    &quot;go.import.settings.migrated&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;ruby.rails.projectView.checked&quot;: &quot;true&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  }
+}</component>
+  <component name="RubyModuleManagerSettings">
+    <option name="blackListedRootsPaths">
+      <list>
+        <option value="$PROJECT_DIR$" />
+      </list>
+    </option>
+  </component>
+  <component name="RunManager">
+    <configuration default="true" type="JetRunConfigurationType">
+      <module name="ARQ" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration default="true" type="KotlinStandaloneScriptRunConfigurationType">
+      <module name="ARQ" />
+      <option name="filePath" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="ce75a70d-00dc-4569-8530-ccde14cb1b25" name="Changes" comment="" />
+      <created>1661452038690</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1661452038690</updated>
+      <workItem from="1661452040335" duration="303000" />
+      <workItem from="1661452355102" duration="30000" />
+      <workItem from="1661452409612" duration="148000" />
+      <workItem from="1661452558261" duration="20000" />
+      <workItem from="1661452595535" duration="56000" />
+      <workItem from="1661452710590" duration="37000" />
+      <workItem from="1661452765048" duration="241000" />
+      <workItem from="1661453072905" duration="80000" />
+      <workItem from="1661453171296" duration="169000" />
+      <workItem from="1661453364228" duration="38000" />
+      <workItem from="1661455464403" duration="116000" />
+      <workItem from="1661656306255" duration="40000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="VgoProject">
+    <integration-enabled>false</integration-enabled>
+    <settings-migrated>true</settings-migrated>
+  </component>
+</project>
