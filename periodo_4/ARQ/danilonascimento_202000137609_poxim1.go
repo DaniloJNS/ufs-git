@@ -390,6 +390,7 @@ func (collection *InstructionCollection) Setup() {
     collection.data[uint16(57)] = &Calls{}
     collection.data[uint16(63)] = &Int{}
 }
+
 // FIX: case when não existts instructiion
 func (collection *InstructionCollection) Get() Executable {
     opcode := uint16(IR.Opcode())
@@ -1642,6 +1643,80 @@ func(ret * Ret) Print() {
     write(code, execution)
 }
 
+type Reti struct { 
+    InstructionFormatF
+    // new address value for ipc, pc, cr
+    AIPC uint32
+    APC uint32
+    ACR uint32
+    VIPC uint32
+    VPC uint32
+    VCR uint32
+}
+
+func (reti *Reti) Execute() {
+    reti.AIPC = SP.data + 4
+    reti.ACR = reti.AIPC + 4
+    reti.APC = reti.ACR  + 4
+    reti.VIPC = Load32(reti.AIPC / 4)
+    reti.VPC = Load32(reti.APC / 4)
+    reti.VCR = Load32(reti.ACR / 4)
+}   
+
+func (reti *Reti) Status() {}
+
+func (reti *Reti) PC() {
+    IPC.data = reti.VIPC
+    CR.data = reti.VCR
+    PC.data = reti.VPC
+}
+
+func (reti *Reti) Store() {
+    SP.data = reti.APC
+}
+
+func(reti * Reti) Print() {
+    execution := fmt.Sprintf("IPC=MEM[0x%08X]=0x%08X,CR=MEM[0x%08X]=0x%08X,PC=MEM[0x%08X]=0x%08X", reti.AIPC, reti.VIPC, reti.ACR, reti.VCR, reti.APC, reti.VPC)
+    code := fmt.Sprintf("reti")
+
+    write(code, execution)
+}
+
+type Cbr struct { InstructionFormatF }
+
+func (cbr *Cbr) Execute() {}   
+
+func (cbr *Cbr) Status() {}
+
+func (cbr *Cbr) Store() {
+    cbr.RZ = 0
+    cbr.RX = 0
+}
+
+func(cbr * Cbr) Print() {
+    execution := fmt.Sprintf("PC=MEM[0x%08X]=0x%08X", cbr.LS, cbr.MS)
+    code := fmt.Sprintf("ret")
+
+    write(code, execution)
+}
+
+type Sbr struct { InstructionFormatF }
+
+func (sbr *Sbr) Execute() {}   
+
+func (sbr *Sbr) Status() {}
+
+func (sbr *Sbr) Store() {
+    sbr.RZ = 1
+    sbr.RX = 1
+}
+
+func(sbr * Sbr) Print() {
+    execution := fmt.Sprintf("PC=MEM[0x%08X]=0x%08X", sbr.LS, sbr.MS)
+    code := fmt.Sprintf("ret")
+
+    write(code, execution)
+}
 type Bae struct { InstructionFormatS }
 
 func (bae *Bae) Execute() {
@@ -1959,10 +2034,14 @@ func (int *Int) Shutdown() bool {
 }
 func (int *Int) Status() {}
 
-func (int *Int) Store() {}
+func (int *Int) Store() {
+    CR.data = int.I16()
+    IPC.data = PC.data
+    PC.data = 0x0000000C
+}
 
 func(int *Int) Print() {
-    execution := fmt.Sprintf("CR=0x%08X,PC=0x%08X", 0, int.NAD) // FIX: missing definition for register CR
+    execution := fmt.Sprintf("CR=0x%08X,PC=0x%08X", CR.data, int.NAD) // FIX: missing definition for register CR
     code := fmt.Sprintf("int %d", int.I26())
 
     write(code, execution)
