@@ -56,6 +56,7 @@ var (
 	     └──────────────────────────────────────────────┘
 	     R29 = PC
     */
+
     PC *ProgramCounter
 
     /*
@@ -204,6 +205,16 @@ type ExecutableFormatSubRoutine interface {
 	    Register
 	}
     // }}}
+
+    func (sr *StackPointer) Unstack() uint32 {
+        sr.data += 4
+        return Load32(sr.data / 4)
+    }
+    
+    func (sr *StackPointer) Stack_up(data uint32)  {
+        Store32(sr.data / 4, data)
+        sr.data -= 4
+    }
 
     // {{{ Status register (SR): control of settings and status of processor operations
 	type StatusRegister struct {
@@ -372,6 +383,8 @@ func (collection *InstructionCollection) Setup() {
     collection.data[uint16(29)] = &S32{}
     collection.data[uint16(30)] = &Call{}
     collection.data[uint16(31)] = &Ret{}
+    collection.data[uint16(32)] = &Reti{}
+    collection.data[uint16(33)] = &Sbr{}
     collection.data[uint16(42)] = &Bae{}
     collection.data[uint16(43)] = &Bat{}
     collection.data[uint16(44)] = &Bbe{}
@@ -593,9 +606,9 @@ func (collection *InstructionCollection) Get() Executable {
 		  └───────┴─────────────────────────────────────┘
 	    **/
 	    type InstructionFormatS struct {
-		Instruction
+            Instruction
 
-		NAD uint32 // Address - New value for address
+            NAD uint32 // Address - New value for address
 	    }
 
 	    func (instruction *InstructionFormatS) New() {
@@ -1655,13 +1668,25 @@ type Reti struct {
 }
 
 func (reti *Reti) Execute() {
-    reti.AIPC = SP.data + 4
-    reti.ACR = reti.AIPC + 4
-    reti.APC = reti.ACR  + 4
-    reti.VIPC = Load32(reti.AIPC / 4)
-    reti.VPC = Load32(reti.APC / 4)
-    reti.VCR = Load32(reti.ACR / 4)
+    reti.Load_IPC()
+    reti.Load_CR()
+    reti.Load_PC()
 }   
+
+func (reti *Reti) Load_PC() {
+    reti.VPC = SP.Unstack()
+    reti.APC = SP.Get()
+}
+
+func (reti *Reti) Load_IPC() {
+    reti.VIPC = SP.Unstack()
+    reti.AIPC = SP.data
+}
+
+func (reti *Reti) Load_CR() {
+    reti.VCR = SP.Unstack()
+    reti.ACR = SP.data
+}
 
 func (reti *Reti) Status() {}
 
@@ -1671,12 +1696,11 @@ func (reti *Reti) PC() {
     PC.data = reti.VPC
 }
 
-func (reti *Reti) Store() {
-    SP.data = reti.APC
-}
+func (reti *Reti) Store() {}
 
 func(reti * Reti) Print() {
-    execution := fmt.Sprintf("IPC=MEM[0x%08X]=0x%08X,CR=MEM[0x%08X]=0x%08X,PC=MEM[0x%08X]=0x%08X", reti.AIPC, reti.VIPC, reti.ACR, reti.VCR, reti.APC, reti.VPC)
+    execution := fmt.Sprintf("IPC=MEM[0x%08X]=0x%08X,CR=MEM[0x%08X]=0x%08X,PC=MEM[0x%08X]=0x%08X",
+                             reti.AIPC, reti.VIPC, reti.ACR, reti.VCR, reti.APC, reti.VPC)
     code := fmt.Sprintf("reti")
 
     write(code, execution)
@@ -1689,8 +1713,8 @@ func (cbr *Cbr) Execute() {}
 func (cbr *Cbr) Status() {}
 
 func (cbr *Cbr) Store() {
-    cbr.RZ = 0
-    cbr.RX = 0
+    // cbr.RZ = 0
+    // cbr.RX = 0
 }
 
 func(cbr * Cbr) Print() {
@@ -1702,21 +1726,24 @@ func(cbr * Cbr) Print() {
 
 type Sbr struct { InstructionFormatF }
 
-func (sbr *Sbr) Execute() {}   
+func (sbr *Sbr) Execute() {
+    sbr.LS = sbr.RX.Get()
+    sbr.MS = sbr.RZ.Get() | 0x00000001 << sbr.LS
+}   
 
 func (sbr *Sbr) Status() {}
 
 func (sbr *Sbr) Store() {
-    sbr.RZ = 1
-    sbr.RX = 1
+    sbr.RZ.Set(sbr.MS)
 }
 
 func(sbr * Sbr) Print() {
-    execution := fmt.Sprintf("PC=MEM[0x%08X]=0x%08X", sbr.LS, sbr.MS)
-    code := fmt.Sprintf("ret")
+    execution := fmt.Sprintf("%s=0x%08X", sbr.RZ.UID(), sbr.RZ.Get())
+    code := fmt.Sprintf("sbr %s[%d]", sbr.RZ.ID(), sbr.RX.Get())
 
     write(code, execution)
 }
+
 type Bae struct { InstructionFormatS }
 
 func (bae *Bae) Execute() {
@@ -2026,18 +2053,26 @@ type Int struct { InstructionFormatS }
 func (int *Int) Execute() {
     if int.I16() == 0 {
         int.NAD = 0
+        return
     }
+    int.NAD = 0x0000000C
+
+    // store in stack the values of pc, cr, ipc
+    SP.Stack_up(PC.Get() + 4)
+    SP.Stack_up(CR.Get())
+    SP.Stack_up(IPC.Get())
 }
 
 func (int *Int) Shutdown() bool {
     return int.I16() == 0
 }
+
 func (int *Int) Status() {}
 
 func (int *Int) Store() {
     CR.data = int.I16()
-    IPC.data = PC.data
-    PC.data = 0x0000000C
+    IPC.data = PC.Get() 
+    // method PC() store new PC value
 }
 
 func(int *Int) Print() {
@@ -2086,6 +2121,7 @@ func Load16(address uint32) uint16 {
 func Load8(adress uint32) (Data uint8){
     return MEM[adress]
 }
+
 type varArgs map[string]interface{}
 
 func NewRegister(args varArgs) Registers {
@@ -2189,7 +2225,7 @@ func main() {
 
     R[0].Set(0)
 
-    for {
+    for i := 0; i < 15; i++  {
 	IR.Load()
 
 	if IR.NOP() {
@@ -2213,13 +2249,6 @@ func main() {
 
 	executable.Print()
 
-	executableInt, ok := executable.(*Int)
-
-	if ok {
-	    if executableInt.Shutdown() {
-	        break
-	    }
-	}
 
 	executableFormatS, ok := executable.(ExecutableFormatSubRoutine)
 
@@ -2228,6 +2257,12 @@ func main() {
 
 	    continue
 	} 
+
+	executableInt, ok := executable.(*Int)
+
+    if ok && executableInt.Shutdown() {
+        break
+    }
 
 	PC.data += 4
     }
