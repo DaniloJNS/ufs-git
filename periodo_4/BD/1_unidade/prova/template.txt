@@ -115,14 +115,26 @@ media_gravadora). Com essas informações, liste o id do produtor, a media_produ
 gravadora, a media_gravadora, porém somente daqueles produtores que possuem média_produtor menor que
 a média_gravadora do gravadora em que ele trabalha.
 
-select produtor.*, AVG(papel.cache) from musicas.produtor
+select produtor.id_produtor, produtor.gravadora from musicas.produtor
+join
+(
+select produtor.*, AVG(papel.cache) art_media from musicas.produtor
 join
     musicas.producao ON producao.id_produtor = produtor.id_produtor
 join
     musicas.papel ON papel.id_papel = produtor.papel
 group by
-    produtor.id_produtor;
-
+    produtor.id_produtor
+) pr_media on pr_media.id_produtor = produtor.id_produtor
+JOIN
+(
+    select gravadora.*, AVG(participacao.valor_recebido) grav_media from musicas.participacao
+    join musicas.gravacao ON gravacao.id_gravacao = participacao.id_gravacao
+    join musicas.musica ON musica.cod_musica = gravacao.musica
+    join musicas.gravadora ON gravadora.id_gravadora = musica.gravadora_direitos
+    group by gravadora.id_gravadora
+) grav on grav.id_gravadora = produtor.gravadora
+where art_media < grav_media;
 Questão 9
 (Valor 1,5) Liste o nome e data de cadastro dos artistas com a menor média de valor recebido em
 gravações
