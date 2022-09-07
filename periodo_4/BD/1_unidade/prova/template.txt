@@ -1,0 +1,71 @@
+Questão 1
+(Valor 0,75)    Para cada gravação cadastrada, liste o nome dos artistas que participaram da
+gravação, o nome dos produtores que produziram a música e o título da música.
+select
+    art.nome artista_nome, prod.nome produtor_nome, musica.titulo musica_titulo from musicas.musica
+join 
+    musicas.gravacao ON gravacao.musica = musica.cod_musica
+join
+    musicas.participacao ON participacao.id_gravacao = gravacao.id_gravacao
+join
+    musicas.artista ON artista.id_artista = participacao.id_artista
+join
+    musicas.usuario art on art.id_usuario = artista.id_usuario
+join
+    musicas.producao ON producao.id_gravacao = gravacao.id_gravacao
+join
+    musicas.produtor ON produtor.id_produtor = producao.id_produtor
+join
+    musicas.usuario prod on prod.id_usuario = produtor.id_usuario;
+
+Questão 2
+(Valor 0,75)    Liste o título da música e o título da sua musica base, somente daquelas músicas que
+possuem música base
+select
+    musica.titulo from musicas.musica
+join
+    musicas.musica musica2 ON musica2.cod_musica = musica.musica_base;
+
+Questão 3
+(Valor 0,75)    Dentre as gravações, liste o título da música, nome dos artistas que participaram da
+gravação, porém somente as músicas que não são músicas base
+
+select art.nome artista_nome, musica.titulo musica_titulo from musicas.musica
+join 
+    musicas.gravacao ON gravacao.musica = musica.cod_musica
+join
+    musicas.participacao ON participacao.id_gravacao = gravacao.id_gravacao
+join
+    musicas.artista ON artista.id_artista = participacao.id_artista
+join
+    musicas.usuario art on art.id_usuario = artista.id_usuario;
+
+Questão 4
+(Valor 0,75)    Liste o nome e a data de cadastro dos artistas que não possuem participação em
+gravações
+
+Questão 5
+(Valor 1,0) Considerando as gravações, liste o título da música, código da música base e soma do
+valor recebido de participações, agrupado pela código da música
+
+Questão 6
+(Valor 1,5) Liste o id do produtor e o id da gravadora, porém considerando somente os produtores os
+quais produziram músicas que possuírem menos de 4 artistas participando
+
+Questão 7
+(Valor 1,5) Considerando os produtores e suas gravadoras, liste o valor de mercado da gravadora com
+a maior média cache dos produtor da gravadora
+
+Questão 8
+(Valor 1,5) Para cada produtor que produziu uma gravação, considerando todas as gravações, é
+possível calcular a média do valor recebido pelas participações na gravação, agrupando pelo id do
+produtor (vamos chamar de media_produtor). Além disso, é possível também calcular a média do valor
+recebido pelas participações na gravação, agrupando pela gravadora (vamos chamar de
+media_gravadora). Com essas informações, liste o id do produtor, a media_produtor, o id da
+gravadora, a media_gravadora, porém somente daqueles produtores que possuem média_produtor menor que
+a média_gravadora do gravadora em que ele trabalha.
+
+Questão 9
+(Valor 1,5) Liste o nome e data de cadastro dos artistas com a menor média de valor recebido em
+gravações
+
