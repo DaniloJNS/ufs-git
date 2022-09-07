@@ -21,6 +21,7 @@ join
 Questão 2
 (Valor 0,75)    Liste o título da música e o título da sua musica base, somente daquelas músicas que
 possuem música base
+
 select
     musica.titulo from musicas.musica
 join
@@ -31,6 +32,8 @@ Questão 3
 gravação, porém somente as músicas que não são músicas base
 
 select art.nome artista_nome, musica.titulo musica_titulo from musicas.musica
+left outer join
+    musicas.musica musica2 ON musica2.musica_base = musica.cod_musica
 join 
     musicas.gravacao ON gravacao.musica = musica.cod_musica
 join
@@ -38,23 +41,70 @@ join
 join
     musicas.artista ON artista.id_artista = participacao.id_artista
 join
-    musicas.usuario art on art.id_usuario = artista.id_usuario;
+    musicas.usuario art on art.id_usuario = artista.id_usuario
+where
+    musica2 is null;
 
 Questão 4
 (Valor 0,75)    Liste o nome e a data de cadastro dos artistas que não possuem participação em
 gravações
 
+select art.nome artista_nome, art.data_cadastro from musicas.artista
+join
+    musicas.usuario art on art.id_usuario = artista.id_usuario
+left outer join
+    musicas.participacao ON participacao.id_artista = artista.id_artista
+left outer join 
+    musicas.gravacao ON gravacao.id_gravacao = participacao.id_gravacao
+WHERE
+    gravacao is null;
+
 Questão 5
 (Valor 1,0) Considerando as gravações, liste o título da música, código da música base e soma do
 valor recebido de participações, agrupado pela código da música
+
+select 
+    titulo, musica.cod_musica, sum(participacao.valor_recebido) from musicas.gravacao
+join
+    musicas.musica on musica.cod_musica = gravacao.musica
+join
+    musicas.participacao on participacao.id_gravacao = gravacao.id_gravacao
+group
+    by musica.cod_musica;
 
 Questão 6
 (Valor 1,5) Liste o id do produtor e o id da gravadora, porém considerando somente os produtores os
 quais produziram músicas que possuírem menos de 4 artistas participando
 
+select produtor.id_produtor, produtor.gravadora from musicas.produtor
+join
+    musicas.producao ON producao.id_produtor = produtor.id_produtor
+join
+    musicas.gravacao ON gravacao.id_gravacao = producao.id_gravacao
+join
+    musicas.participacao ON participacao.id_gravacao = gravacao.id_gravacao
+join
+    musicas.artista ON artista.id_artista = participacao.id_artista
+group by
+    produtor.id_produtor
+having
+    count(artista.id_artista) > 4;
+
 Questão 7
 (Valor 1,5) Considerando os produtores e suas gravadoras, liste o valor de mercado da gravadora com
 a maior média cache dos produtor da gravadora
+
+select
+    gravadora.valor_mercado from musicas.gravadora
+join
+    musicas.produtor ON produtor.gravadora = gravadora.id_gravadora
+join
+    musicas.papel ON papel.id_papel = produtor.papel
+group by
+    gravadora.id_gravadora
+order by 
+    AVG(papel.cache) desc
+limit 1;
 
 Questão 8
 (Valor 1,5) Para cada produtor que produziu uma gravação, considerando todas as gravações, é
@@ -65,7 +115,25 @@ media_gravadora). Com essas informações, liste o id do produtor, a media_produ
 gravadora, a media_gravadora, porém somente daqueles produtores que possuem média_produtor menor que
 a média_gravadora do gravadora em que ele trabalha.
 
+select produtor.*, AVG(papel.cache) from musicas.produtor
+join
+    musicas.producao ON producao.id_produtor = produtor.id_produtor
+join
+    musicas.papel ON papel.id_papel = produtor.papel
+group by
+    produtor.id_produtor;
+
 Questão 9
 (Valor 1,5) Liste o nome e data de cadastro dos artistas com a menor média de valor recebido em
 gravações
 
+select
+    usuario.nome artista_nome, usuario.data_cadastro artista_data_cadastro from musicas.artista
+join
+    musicas.participacao ON participacao.id_artista = artista.id_artista
+join
+    musicas.usuario ON usuario.id_usuario = artista.id_usuario 
+group by
+    usuario.id_usuario
+order by 
+    AVG(participacao.valor_recebido) asc;
