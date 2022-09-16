@@ -8,12 +8,15 @@ import (
 	"math/bits"
 	"os"
 	"strings"
+	"sync"
 )
 
 var (
-    MEM *[32768]uint8 = new([32768]uint8) // Memory with 32KB
+    MEM          *[32768]uint8 = new([32768]uint8) // Memory with 32KB
+    MEM_FPU  *[16]uint8    = new([16]uint8)    // Memory mapping for FPU
+    MEM_WATCHDOG *[16]uint8    = new([16]uint8)    // Memory mapping for WATCHDOG
 
-    R *[32]Registers = new([32]Registers)
+    R *[32]Registers = new([32]Registers) // 32 registers  with 32 bits
 
     INSTRUCTION = InstructionCollection{}
 
@@ -22,7 +25,7 @@ var (
 
 	    31           7  6    5    4    3    2    1    0
 	     ┌───────────┬────┬────┬────┬────┬────┬────┬────┐
-	     │    ---    │ ZN │ ZD │ SN │ OV │ IV │ -- │ CY │
+	     │    ---    │ ZN │ ZD │ SN │ OV │ IV │ IE │ CY │
 	     └───────────┴────┴────┴────┴────┴────┴────┴────┘
 	     R31 = SR
 
@@ -32,6 +35,7 @@ var (
 	    - SN (sign): indicates if the result of the operation has a negative sign
 	    - OV (overflow): capacity overflow
 	    - IV (invalid instruction): Invalid operation code
+        - IE (Interrupt Exception): Enable/Disable insterruptions maskable
 	    - CY (carry): goes to an arithmetic
     */
     SR *StatusRegister 
@@ -91,6 +95,26 @@ var (
 	     R26 = PC
     */
     CR *ClaimRegister
+    
+    /*
+        Watch Dog Register (WD): Time recorder
+´
+	    31     30                                        0
+	     ┌──────────────────────────────────────────────┐
+	     │  EN │               COUNTER                  │
+	     └──────────────────────────────────────────────┘
+	       RW                    RW
+	* Fields Description
+	    - EN      : Indicates WatchDog is enabled
+	    - Counter : Quantifies the number of interactions remaining
+    */
+    WD *WatchDogRegister
+
+    IC *InterruptionControl
+
+    EVENT = make(chan string, 1)
+
+    WG sync.WaitGroup
 
     STATUS uint32
 )
@@ -114,6 +138,14 @@ const (
      I11           = uint32(0x000007FF)
      I16           = uint32(0x0000FFFF)
      I26           = uint32(0x03FFFFFF)
+     
+     // Mapping Address For Registers In Memory
+     WATCHDOG      = uint32(0x80808080)
+     FPU_X         = uint32(0x80808880)
+     FPU_Y         = uint32(0x80808884)
+     FPU_C         = uint32(0x80808888)
+     FPU_CONTROL   = uint32(0x8080888C)
+     TERMINAL      = uint32(0x80808888)
 
      DeslocOP      = uint32(26)
      DeslocSubCode = uint32(8)
@@ -122,6 +154,7 @@ const (
      DeslocY       = uint32(11)
      DeslocV       = uint32(6)
 )
+
 
 type Executable interface {
     New()
@@ -139,16 +172,21 @@ type ExecutableFormatSubRoutine interface {
 
     // This interface define the format basic of register
     type Registers interface {
-	Get() uint32
-	Set(uint32)
-	ID() string
-	UID() string
+        Get() uint32
+        Set(uint32)
+        ID() string
+        UID() string
+    }
+
+    type MemRegisters interface {
+        Get() uint32
+        Set(uint32)
     }
 
     // Struct Basic Regist
     type Register struct {
-	data uint32
-	Id string
+        data uint32
+        Id string
     }
 
     // Default read access
@@ -172,16 +210,67 @@ type ExecutableFormatSubRoutine interface {
 
     // Default register without registrition for read and write
     type GeneralRegister struct {
-	Register
+        Register
     }
 
     // Default register with registrition for write
     type ReadOnlyRegister struct {
-	Register
+        Register
     }
 
     // Especific Set for blocked write in register
 	func (register *ReadOnlyRegister) Set(val uint32) {}
+    
+    // Mem Registers has your data store in memory
+    type MemRegister struct {
+        Register
+        base_adress uint32 // data address in memory
+    }
+    
+	func (register *MemRegister) New(address uint32) {
+	    register.base_adress = address
+	}
+
+	func (register *MemRegister) Get() uint32 {
+        return Load32(register.base_adress / 4)
+	}
+    
+    // Default write access
+	func (register *MemRegister) Set(val uint32) {
+        Store32(register.base_adress / 4, val)
+	}
+
+    type WatchDogRegister struct {
+        MemRegister
+    }
+    
+	func (register *WatchDogRegister) New() {
+	    register.base_adress = WATCHDOG;
+	}
+
+	func (register *WatchDogRegister) Enable() bool {
+        en := register.Get() >> 31
+
+        // Enable = true = 1 || Disable = false = 0
+        return en == 1 
+	}
+
+	func (register *WatchDogRegister) Counter() uint32 {
+        return register.Get() & 0x7FFFFFFF
+	}
+
+	func (register *WatchDogRegister) Count() bool {
+        if !register.Enable() { return false}
+
+        if register.Counter() > 0 { 
+            register.Set(register.Get() - 1)
+        } else {
+            register.Set(0x00000000)  
+            IC.Emit_Event("Hardware Interruption 1")
+        }
+        
+        return true
+	}
 
     // {{{ Interruption Program Counter (IPC): Store the instruction address where the interruption was generated or caused
 	type InterruptionProgramCounter struct {
@@ -231,21 +320,22 @@ type ExecutableFormatSubRoutine interface {
 
 	// ZN (zero): equal to 0
 	    func (SR *StatusRegister) ZN(set bool ) {
-		bit :=  convertBool(set) << 6
-		resetBit:= uint32(0x000000001) << 6
-		SR.Set((SR.Get() & ^resetBit) | bit)
+            bit :=  convertBool(set) << 6
+            resetBit:= uint32(0x000000001) << 6
+            SR.Set((SR.Get() & ^resetBit) | bit)
 	    }
 
 	    func (SR *StatusRegister) Get_ZN() bool {
-		ZN :=  (SR.Get() >> 6) & uint32(0x00000001)
-		return ZN == uint32(0x00000001)
+            ZN :=  (SR.Get() >> 6) & uint32(0x00000001)
+            return ZN == uint32(0x00000001)
 	    }
 
 	// ZD (division by zero): divisor B = 0
 	    func (SR *StatusRegister) ZD(set bool) {
-		bit :=  convertBool(set) << 5
-		resetBit:= uint32(0x000000001) << 5
-		SR.Set((SR.Get() & ^resetBit) | bit)
+            IC.Emit_Event("Zero Division")
+            bit :=  convertBool(set) << 5
+            resetBit:= uint32(0x000000001) << 5
+            SR.Set((SR.Get() & ^resetBit) | bit)
 	    }
 
 	    func (SR *StatusRegister) Get_ZD() bool {
@@ -416,6 +506,212 @@ func (collection *InstructionCollection) Get() Executable {
     return collection.data[opcode * 300 + subcode]
 }
 
+type InterruptionControl struct {
+    InterruptionVector map[string]map[string]interface{}
+
+    ZD_channel  chan struct{}
+    IV_channel  chan struct{}
+    GI_channel  chan struct{}
+    HW1_channel chan struct{}
+}
+
+func (ic *InterruptionControl) New()  {
+    ic.InterruptionVector = map[string]map[string]interface{}{
+        "Startup": {
+            "id": "SOFTWARE INTERRUPTION",
+            "address": uint32(0x00000000),
+            "maskable": false,
+            "priority": 0,
+        },
+        "Invalid Instruction": {
+            "id": "SOFTWARE INTERRUPTION",
+            "address": uint32(0x00000004),
+            "maskable": false,
+            "priority": -1,
+            "channel": &ic.IV_channel,
+            "ISR": &InvalidInstruction{},
+        },
+        "Zero Division": {
+            "id": "SOFTWARE INTERRUPTION",
+            "address": uint32(0x00000008),
+            "maskable": true,
+            "priority": -1,
+            "channel": &ic.ZD_channel,
+            "ISR": &ZeroDivision{},
+        },
+        "General Interruption": {
+            "id": "SOFTWARE INTERRUPTION",
+            "address": uint32(0x0000000C),
+            "maskable": false,
+            "priority": -1,
+            "channel": &ic.GI_channel,
+            "ISR": &GeneralInterruption{},
+        },
+        "Hardware Interruption 1": {
+            "id": "HARDWARE INTERRUPTION 1",
+            "address": uint32(0x00000010),
+            "maskable": true,
+            "priority": 1,
+            "channel": &ic.HW1_channel,
+            "ISR": &HardwareInterruption1{},
+        },
+    }
+    ic.Setup_events()
+}
+
+func (ic *InterruptionControl) Setup_events()  {
+    ic.ZD_channel = make(chan struct{})
+    ic.IV_channel = make(chan struct{})
+    ic.GI_channel = make(chan struct{})
+    ic.HW1_channel = make(chan struct{})
+    
+    go ic.Handle_ZD()
+    go ic.Handle_IV()
+    go ic.Handle_GI()
+    go ic.Handle_HW1()
+    // Generate Handles with function generic
+}
+
+func (ic *InterruptionControl) execute()  {
+    event, ok := ic.try_receive_event()
+
+    if ok {
+        // Implement interruptions pending
+        interruption := ic.InterruptionVector[event]
+        maskable, ok := interruption["maskable"].(bool)
+
+        if !ok { return }
+
+        interruption_name := interruption["id"].(string)
+        fmt.Printf("[%s]\n", interruption_name)
+
+        if !maskable || maskable && SR.Get_IE() {
+            ic.Save_context()
+            isr := interruption["ISR"].(Interruption)
+
+            isr.New()
+            isr.Execute()
+        }
+    }
+}
+
+func (ic *InterruptionControl) try_receive_event() (event string, success bool){
+    WG.Wait()
+
+    select {
+        case event = <- EVENT:
+            success = true
+        default:
+            success = false
+    }
+    
+    return
+}
+
+func (ic *InterruptionControl) Save_context() {
+    SP.Stack_up(PC.data)
+    SP.Stack_up(CR.data)
+    SP.Stack_up(IPC.data)
+}
+
+func (ic *InterruptionControl) Emit_Event(id string) {
+    interruption := ic.InterruptionVector[id]
+
+    channel := interruption["channel"].(*chan struct{})
+    
+    WG.Add(1)
+
+    *channel <- struct{}{}
+}
+
+func (ic *InterruptionControl) Handle_ZD() {
+    for {
+        <- ic.ZD_channel
+        
+        EVENT <- "Zero Division"
+
+        WG.Done()
+    }
+}
+
+func (ic *InterruptionControl) Handle_IV() {
+    for {
+        <- ic.IV_channel
+        
+        EVENT <- "Invalid Instruction"
+
+        WG.Done()
+    }
+}
+
+func (ic *InterruptionControl) Handle_GI() {
+    for {
+        <- ic.GI_channel
+
+        EVENT <- "General Interruption"
+
+        WG.Done()
+    }
+}
+
+func (ic *InterruptionControl) Handle_HW1() {
+    for {
+        <- ic.HW1_channel
+        
+        EVENT <- "Hardware Interruption 1"
+
+        WG.Done()
+    }
+}
+
+type Interruption interface {
+    New()
+    Execute()
+}
+
+type ISR struct {
+    pc uint32
+    cr uint32
+    ipc uint32
+}
+
+func (isr *ISR) Execute()  {
+    IPC.Set(isr.ipc)
+    PC.Set(isr.pc) 
+    CR.Set(isr.cr) 
+}
+
+type ZeroDivision struct { ISR }
+
+func (zd *ZeroDivision) New() {
+    zd.pc = 0x00000008
+    zd.cr = 0x00000000
+    zd.ipc = PC.data - 4
+}
+
+type InvalidInstruction struct { ISR }
+
+func (gi *InvalidInstruction) New()  {
+    gi.pc = 0x00000004
+    gi.cr = uint32(IR.Opcode())
+    gi.ipc = PC.data - 4
+}
+
+type GeneralInterruption struct { ISR }
+
+func (gi *GeneralInterruption) New()  {
+    gi.pc = 0x0000000C
+    gi.cr = Int{}.I16()
+    gi.ipc = PC.data - 4
+}
+
+type HardwareInterruption1 struct { ISR }
+
+func (hw1 *HardwareInterruption1) New()  {
+    hw1.pc = 0x00000010
+    hw1.cr = 0xE1AC04DA
+    hw1.ipc = PC.data
+}
 // {{{ Intructions
 
     // {{{ Default struct for Instruction, each instruction defining yours fields
@@ -510,7 +806,9 @@ func (collection *InstructionCollection) Get() Executable {
 		instruction.MS = 0
 		instruction.LS = 0
 	    }
-
+        
+        // in shift instruction like sra, we must inscrement the shift factor
+        // to avoid nop when 0
 	    func (instruction InstructionFormatUforSubCode) Desloc() uint32 {
 	        return instruction.I5() + 1
 	    }
@@ -574,7 +872,7 @@ func (collection *InstructionCollection) Get() Executable {
 	    }
 
 	    func (instruction InstructionFormatF) I16s() uint32 {
-		return instruction.I16() | instruction.signal()
+            return instruction.I16() | instruction.signal()
 	    }
 
 	    func (instruction *InstructionFormatF) signal() uint32 {
@@ -896,8 +1194,8 @@ type Div struct { InstructionFormatUforSubCode }
 // R[I] : R[z] = R[x] * R[y]
 func (div *Div) Execute() {
     if div.RY.Get() == uint32(0x00000000) {
-	div.MS, div.LS = 0, 0
-	return
+        div.MS, div.LS = 0, 0
+        return
     }
 
     div.MS = div.RX.Get() % div.RY.Get()
@@ -907,9 +1205,7 @@ func (div *Div) Execute() {
 func (div *Div) Status() {
     SR.ZD(div.RY.Get() == 0) 
 
-    if div.RY.Get() == 0 { return } // When has divi per zero only set ZD
-
-    SR.ZD(div.RY.Get() == 0)
+    if div.RY.Get() == 0 { return } // When has divi by zero only set ZD
 
     SR.CY(div.MS != 0)
 }
@@ -926,11 +1222,11 @@ func(div * Div) Print() {
     var mod uint32 
 
     if SR.Get() != uint32(0x00000060){
-	mod = div.RI.Get()
-	// quo = div.RZ.Get()
+        mod = div.RI.Get()
+        // quo = div.RZ.Get()
     } else {
-	mod = div.MS
-	// quo = div.LS
+        mod = div.MS
+        // quo = div.LS
     }
 
     execution := fmt.Sprintf("%s=%s%%%s=0x%08X,%s=%s/%s=0x%08X,SR=0x%08X",
@@ -1680,12 +1976,12 @@ func (reti *Reti) Load_PC() {
 
 func (reti *Reti) Load_IPC() {
     reti.VIPC = SP.Unstack()
-    reti.AIPC = SP.data
+    reti.AIPC = SP.Get()
 }
 
 func (reti *Reti) Load_CR() {
     reti.VCR = SP.Unstack()
-    reti.ACR = SP.data
+    reti.ACR = SP.Get()
 }
 
 func (reti *Reti) Status() {}
@@ -1702,6 +1998,7 @@ func(reti * Reti) Print() {
     execution := fmt.Sprintf("IPC=MEM[0x%08X]=0x%08X,CR=MEM[0x%08X]=0x%08X,PC=MEM[0x%08X]=0x%08X",
                              reti.AIPC, reti.VIPC, reti.ACR, reti.VCR, reti.APC, reti.VPC)
     code := fmt.Sprintf("reti")
+    // fmt.Printf("SR=MEM[0x%08X]=0x%08X\n", SP.data, Load32(SP.data /4))
 
     write(code, execution)
 }
@@ -1727,7 +2024,7 @@ func(cbr * Cbr) Print() {
 type Sbr struct { InstructionFormatF }
 
 func (sbr *Sbr) Execute() {
-    sbr.LS = sbr.RX.Get()
+    sbr.LS = sbr.X()
     sbr.MS = sbr.RZ.Get() | 0x00000001 << sbr.LS
 }   
 
@@ -1739,7 +2036,7 @@ func (sbr *Sbr) Store() {
 
 func(sbr * Sbr) Print() {
     execution := fmt.Sprintf("%s=0x%08X", sbr.RZ.UID(), sbr.RZ.Get())
-    code := fmt.Sprintf("sbr %s[%d]", sbr.RZ.ID(), sbr.RX.Get())
+    code := fmt.Sprintf("sbr %s[%d]", sbr.RZ.ID(), sbr.X())
 
     write(code, execution)
 }
@@ -2028,6 +2325,7 @@ func(bzd *Bzd) Print() {
 
     write(code, execution)
 }
+
 type Calls struct { InstructionFormatS }
 
 func (calls *Calls) Execute() {
@@ -2053,30 +2351,28 @@ type Int struct { InstructionFormatS }
 func (int *Int) Execute() {
     if int.I16() == 0 {
         int.NAD = 0
+        CR.data = 0
         return
     }
-    int.NAD = 0x0000000C
 
-    // store in stack the values of pc, cr, ipc
-    SP.Stack_up(PC.Get() + 4)
-    SP.Stack_up(CR.Get())
-    SP.Stack_up(IPC.Get())
+    int.NAD = 0x0000000C
+    IC.Emit_Event("General Interruption")
 }
 
 func (int *Int) Shutdown() bool {
     return int.I16() == 0
 }
 
-func (int *Int) Status() {}
-
-func (int *Int) Store() {
-    CR.data = int.I16()
-    IPC.data = PC.Get() 
-    // method PC() store new PC value
+func (int *Int) PC() {
+    PC.data += 4
 }
 
+func (int *Int) Status() {}
+
+func (int *Int) Store() {}
+
 func(int *Int) Print() {
-    execution := fmt.Sprintf("CR=0x%08X,PC=0x%08X", CR.data, int.NAD) // FIX: missing definition for register CR
+    execution := fmt.Sprintf("CR=0x%08X,PC=0x%08X", int.I16(), int.NAD) // FIX: missing definition for register CR
     code := fmt.Sprintf("int %d", int.I26())
 
     write(code, execution)
@@ -2100,6 +2396,11 @@ func Store16(address uint32, Data uint16) {
 
 // Store 8 bits from memory
 func Store8(address uint32, Data uint8) {
+    if address >= WATCHDOG && address < WATCHDOG + 4 {
+        MEM_WATCHDOG[address - WATCHDOG] = Data
+        return
+    }
+
     MEM[address] = Data
 }
 
@@ -2118,8 +2419,12 @@ func Load16(address uint32) uint16 {
 }
 
 // Load 8 bits from memory
-func Load8(adress uint32) (Data uint8){
-    return MEM[adress]
+func Load8(address uint32) (Data uint8){
+    if address >= WATCHDOG && address < WATCHDOG + 4 {
+        return MEM_WATCHDOG[address - WATCHDOG]
+    }
+    
+    return MEM[address]
 }
 
 type varArgs map[string]interface{}
@@ -2134,14 +2439,15 @@ func NewRegister(args varArgs) Registers {
     register_base := Register{ Id: id}
 
     switch args["register_type"] {
-	case "ReadOnlyRegister": register = &ReadOnlyRegister{Register: register_base}
-	case "GeneralRegister":  register = &GeneralRegister{Register: register_base}
-	case "SR":		 register = &StatusRegister{Register: register_base}
-	case "IR":		 register = &InstructionRegister{Register: register_base}
-	case "SP":		 register = &StackPointer{Register: register_base}
-	case "PC":		 register = &ProgramCounter{Register: register_base}
-	case "IPC":		 register = &InterruptionProgramCounter{Register: register_base}
-	case "CR":		 register = &ClaimRegister{Register: register_base}
+        case "ReadOnlyRegister": register = &ReadOnlyRegister{Register: register_base}
+        case "GeneralRegister":  register = &GeneralRegister{Register: register_base}
+        case "SR":		         register = &StatusRegister{Register: register_base}
+        case "IR":		         register = &InstructionRegister{Register: register_base}
+        case "SP":		         register = &StackPointer{Register: register_base}
+        case "PC":		         register = &ProgramCounter{Register: register_base}
+        case "IPC":		         register = &InterruptionProgramCounter{Register: register_base}
+        case "CR":		         register = &ClaimRegister{Register: register_base}
+        case "WD":		         register = &WatchDogRegister{MemRegister: MemRegister{Register: register_base} }
     }
     
     return register
@@ -2151,15 +2457,15 @@ func Setup_registers() {
     R[0] = NewRegister(varArgs{ "register_type": "ReadOnlyRegister", "id": "r0" })
 
     for i := 1; i <= 27; i++ {
-	id := fmt.Sprintf("r%d", i)
-	R[i] = NewRegister(varArgs{ "register_type": "GeneralRegister", "id": id })
+        id := fmt.Sprintf("r%d", i)
+        R[i] = NewRegister(varArgs{ "register_type": "GeneralRegister", "id": id })
     }
 
     R[I_SR] =  NewRegister(varArgs{ "register_type":  "SR",  "id": "sr" })
     R[I_PC] =  NewRegister(varArgs{ "register_type":  "PC",  "id": "pc" })
     R[I_IR] =  NewRegister(varArgs{ "register_type":  "IR",  "id": "ir" })
     R[I_SP] =  NewRegister(varArgs{ "register_type":  "SP",  "id": "sp" })
-    R[I_IPC] = NewRegister(varArgs{ "register_type": "IPC", "id": "ipc" })
+    R[I_IPC] = NewRegister(varArgs{ "register_type":  "IPC", "id": "ipc" })
     R[I_CR] =  NewRegister(varArgs{ "register_type":  "CR",  "id": "cr" })
 
     SR = R[I_SR].(*StatusRegister)
@@ -2173,6 +2479,27 @@ func Setup_registers() {
     IPC = R[I_IPC].(*InterruptionProgramCounter)
 
     CR = R[I_CR].(*ClaimRegister)
+}
+
+func NewRegisterMem(args varArgs) MemRegisters {
+    var register MemRegisters
+    mem_register := MemRegister{ base_adress: args["address"].(uint32) }
+
+    switch args["register_type"] {
+        case "WD":	register = &WatchDogRegister{MemRegister: mem_register} 
+    }
+    
+    return register
+}
+
+func Setup_mem_register() {
+    WD = NewRegisterMem(varArgs{ "register_type":  "WD", "address": WATCHDOG}).(*WatchDogRegister)
+}
+
+
+func Start_interruption_control()  {
+    IC = &InterruptionControl{}
+    IC.New()
 }
 
 // Store in memory full instruction of file
@@ -2215,6 +2542,8 @@ func write(code string, execution string) {
 func main() {
     setup_IO()
     Setup_registers()
+    Setup_mem_register()
+    Start_interruption_control()
     read_instructions(os.Stdin)
 
     INSTRUCTION.New()
@@ -2225,47 +2554,52 @@ func main() {
 
     R[0].Set(0)
 
-    for i := 0; i < 15; i++  {
-	IR.Load()
+    
+    for {
+        WD.Count()
+        IC.execute()
+        IR.Load()
 
-	if IR.NOP() {
-	    continue
-	}
+        if IR.NOP() {
+            continue
+        }
 
-	executable := INSTRUCTION.Get()
+        executable := INSTRUCTION.Get()
 
-	if executable == nil {
-	    fmt.Printf("[INVALID INSTRUCTION @ 0x%08X]\n", IR.Get())
-	    break
-	}
+        if executable == nil {
+            SR.IV(true)
+            IC.Emit_Event("Invalid Instruction")
+            fmt.Printf("[INVALID INSTRUCTION @ 0x%08X]\n", IR.Opcode())
+        } else {
+            executable.New()
 
-	executable.New()
+            executable.Execute()
 
-	executable.Execute()
+            executable.Store()
 
-	executable.Store()
+            executable.Status()
 
-	executable.Status()
-
-	executable.Print()
+            executable.Print()
 
 
-	executableFormatS, ok := executable.(ExecutableFormatSubRoutine)
+            executableInt, ok := executable.(*Int)
 
-	if ok {
-	    executableFormatS.PC()
+            if ok && executableInt.Shutdown() {
+                break
+            }
 
-	    continue
-	} 
+            executableFormatS, ok := executable.(ExecutableFormatSubRoutine)
 
-	executableInt, ok := executable.(*Int)
+            if ok {
+                executableFormatS.PC()
 
-    if ok && executableInt.Shutdown() {
-        break
+                continue
+            } 
+        }
+
+
+        PC.data += 4
     }
 
-	PC.data += 4
-    }
-
-    fmt.Println("[END OF SIMULATION]");
+    fmt.Printf("[END OF SIMULATION]");
 }
