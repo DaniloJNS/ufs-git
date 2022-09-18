@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"math/bits"
 	"os"
 	"strings"
@@ -13,7 +14,7 @@ import (
 
 var (
     MEM          *[32768]uint8 = new([32768]uint8) // Memory with 32KB
-    MEM_FPU  *[16]uint8    = new([16]uint8)    // Memory mapping for FPU
+    MEM_FPU      *[16]uint8    = new([16]uint8)    // Memory mapping for FPU
     MEM_WATCHDOG *[16]uint8    = new([16]uint8)    // Memory mapping for WATCHDOG
 
     R *[32]Registers = new([32]Registers) // 32 registers  with 32 bits
@@ -110,7 +111,9 @@ var (
     */
     WD *WatchDogRegister
 
-    IC *InterruptionControl
+    IC *InterruptionControl = &InterruptionControl{}
+
+    FPU *Fpu = &Fpu{}
 
     EVENT = make(chan string, 1)
 
@@ -143,7 +146,7 @@ const (
      WATCHDOG      = uint32(0x80808080)
      FPU_X         = uint32(0x80808880)
      FPU_Y         = uint32(0x80808884)
-     FPU_C         = uint32(0x80808888)
+     FPU_Z         = uint32(0x80808888)
      FPU_CONTROL   = uint32(0x8080888C)
      TERMINAL      = uint32(0x80808888)
 
@@ -155,6 +158,242 @@ const (
      DeslocV       = uint32(6)
 )
 
+type Fpu struct {
+    RX, RY, RZ MemRegister
+    RC ControlFpuMemRegister
+    X, Y, Z float32
+
+    enable bool
+    cycles uint32
+    operations map[uint16]Operation
+
+    current_operation Operation
+}
+
+type Operation struct {
+    run func()
+    multiple_cycles bool
+}
+
+func (fpu *Fpu) New() {
+    fpu.RX.base_adress = FPU_X
+    fpu.RY.base_adress = FPU_Y
+    fpu.RZ.base_adress = FPU_Z
+    fpu.RC.base_adress = FPU_CONTROL
+
+    fpu.Setup_operations()
+}
+
+func (fpu *Fpu) Setup_operations() {
+    fpu.operations = map[uint16]Operation {
+        1: {
+            run: fpu.Add,
+            multiple_cycles: true,
+        },
+        2: {
+            run: fpu.Sub,
+            multiple_cycles: true,
+        },
+        3: {
+            run: fpu.Mul,
+            multiple_cycles: true,
+        },
+        4: {
+            run: fpu.Div,
+            multiple_cycles: true,
+        },
+        5: {
+            run: fpu.AttX,
+            multiple_cycles: false,
+        },
+        6: {
+            run: fpu.AttY,
+            multiple_cycles: false,
+        },
+        7: {
+            run: fpu.Top,
+            multiple_cycles: false,
+        },
+        8: {
+            run: fpu.Bottom,
+            multiple_cycles: false,
+        },
+        9: {
+            run: fpu.Round,
+            multiple_cycles: false,
+        },
+    }
+}
+
+func (fpu *Fpu) Load_operation() Operation {
+   code_operation := fpu.RC.Operation()
+   
+   return fpu.operations[uint16(code_operation)]
+}
+
+func (fpu *Fpu) calculates_exp(value float32) int32{
+    return int32(((math.Float32bits(value) & 0x7F800000) >> 23))
+}
+
+func (fpu *Fpu) calculates_cycles() {
+   status := fpu.current_operation.multiple_cycles
+
+   if status {
+       exp_x := fpu.calculates_exp(fpu.Get_X())
+    //    fmt.Println("exp_x = ", exp_x)
+       exp_y := fpu.calculates_exp(fpu.Get_Y())
+    //    fmt.Println("exp_y = ", exp_y)
+
+    //    fmt.Println("sub = ", int32(exp_x - exp_y))
+       abs := math.Abs(float64(exp_x - exp_y))
+    //    fmt.Println("abs = ", abs)
+       fpu.cycles = uint32(abs)
+    //    fmt.Println("cycles = ", fpu.cycles)
+   } else {
+       fpu.cycles = 0
+   }
+}
+
+func (fpu *Fpu) Get_X() float32 {
+    MEM_X_FLOAT_32_BITS := math.Float32frombits(fpu.RX.Get())
+
+    if MEM_X_FLOAT_32_BITS == fpu.X {
+        return fpu.X
+    } else {
+        return float32(fpu.RX.Get())
+    }
+}
+
+func (fpu *Fpu) Get_Y() float32 {
+    MEM_Y_FLOAT_32_BITS := math.Float32frombits(fpu.RY.Get())
+
+    if MEM_Y_FLOAT_32_BITS == fpu.Y {
+        return fpu.Y
+    } else {
+        return float32(fpu.RY.Get())
+    }
+}
+
+func (fpu *Fpu) Get_Z() float32 {
+    MEM_Z_FLOAT_32_BITS := math.Float32frombits(fpu.RZ.Get())
+
+    if MEM_Z_FLOAT_32_BITS == fpu.Z {
+        return fpu.Z
+    } else {
+        return float32(fpu.RZ.Get())
+    }
+}
+
+func (fpu *Fpu) Set_X(x float32) {
+    fpu.RX.Set(math.Float32bits(x))
+    fpu.X = x
+}
+
+func (fpu *Fpu) Set_Y(y float32) {
+    fpu.RY.Set(math.Float32bits(y))
+    fpu.Y = y
+}
+
+func (fpu *Fpu) Set_Z(z float32) {
+    fpu.RZ.Set(math.Float32bits(z))
+    fpu.Z = z
+}
+
+func (fpu *Fpu) Reset() {
+    fpu.RC.SetStatus(false)
+    fpu.RC.ResetOperation()
+    fpu.enable= false
+    fpu.cycles = 0
+    fpu.current_operation = Operation{}
+}
+
+func (fpu *Fpu) Execute() {
+    if fpu.RC.Operation() == 0 { return }
+    
+    if !fpu.enable {
+       fpu.enable = true
+       
+       fpu.current_operation = fpu.Load_operation()
+       
+       if fpu.current_operation.run == nil { 
+           fpu.raise_invalid_instruction() 
+           
+           return
+        }
+       
+       fpu.calculates_cycles()
+    } else {
+       fpu.cycles--
+    }
+    
+    if fpu.cycles == 0 {
+       fpu.current_operation.run()
+
+       if fpu.RC.Status() == 1 {
+           IC.Emit_Event("Hardware Interruption 2")
+       } else if fpu.current_operation.multiple_cycles {
+           IC.Emit_Event("Hardware Interruption 3")
+       } else {
+           IC.Emit_Event("Hardware Interruption 4")
+       }
+       
+       fpu.Reset()
+
+       WG.Wait()
+    }
+}
+
+func (fpu *Fpu) raise_invalid_instruction() {
+    fpu.RC.SetStatus(true)
+
+    IC.Emit_Event("Hardware Interruption 2")
+    WG.Wait()
+}
+
+func (fpu *Fpu) Add() {
+    sum := fpu.Get_X() + fpu.Get_Y()
+    fpu.Set_Z(sum)
+}
+
+func (fpu *Fpu) Sub() {
+    sub := fpu.Get_X() - fpu.Get_Y()
+    fpu.Set_Z(sub)
+}
+
+func (fpu *Fpu) Mul() {
+    mul := fpu.Get_X() * fpu.Get_Y()
+    fpu.Set_Z(mul)
+}
+
+func (fpu *Fpu) Div() {
+    if fpu.Get_Y() == float32(0) {
+        fpu.RC.SetStatus(true)
+        return
+    }
+
+    div := fpu.Get_X() / fpu.Get_Y()
+    fpu.Set_Z(div)
+}
+
+func (fpu *Fpu) AttX() {
+    fpu.Set_X(fpu.Get_Z())
+}
+
+func (fpu *Fpu) AttY() {
+    fpu.Set_Y(fpu.Get_Z())
+}
+
+func (fpu *Fpu) Top() {
+    fpu.RZ.Set(uint32(math.Ceil(float64(fpu.Get_Z()))))
+}
+
+func (fpu *Fpu) Bottom() {
+    fpu.RZ.Set(uint32(math.Floor(float64(fpu.Get_Z()))))
+}
+
+func (fpu *Fpu) Round() {
+    fpu.RZ.Set(uint32(math.Round(float64(fpu.Get_Z()))))
+}
 
 type Executable interface {
     New()
@@ -222,8 +461,8 @@ type ExecutableFormatSubRoutine interface {
 	func (register *ReadOnlyRegister) Set(val uint32) {}
     
     // Mem Registers has your data store in memory
+    // Mem Registers has your data store in memory
     type MemRegister struct {
-        Register
         base_adress uint32 // data address in memory
     }
     
@@ -238,6 +477,28 @@ type ExecutableFormatSubRoutine interface {
     // Default write access
 	func (register *MemRegister) Set(val uint32) {
         Store32(register.base_adress / 4, val)
+	}
+
+    type ControlFpuMemRegister struct {
+        MemRegister
+    }
+    
+	func (register *ControlFpuMemRegister) Operation() uint8 {
+        return uint8(register.Get() & 0x0000001F)
+	}
+
+	func (register *ControlFpuMemRegister) ResetOperation() {
+        register.Set(register.Get() & 0xFFFFFFE0)
+	}
+    
+	func (register *ControlFpuMemRegister) Status() uint8 {
+        return uint8(register.Get() & 0x00000020) >> 5
+	}
+
+	func (register *ControlFpuMemRegister) SetStatus(status bool) {
+        bit :=  convertBool(status) << 5
+        resetBit:= uint32(0x000000001) << 5
+        register.Set((register.Get() & ^resetBit) | bit)
 	}
 
     type WatchDogRegister struct {
@@ -357,51 +618,51 @@ type ExecutableFormatSubRoutine interface {
 
 	// OV (overflow): capacity overflow
 	    func (SR *StatusRegister) OV(set bool) {
-		bit :=  convertBool(set) << 3
-		resetBit:= uint32(0x000000001) << 3
-		SR.Set((SR.Get() & ^resetBit) | bit)
+            bit :=  convertBool(set) << 3
+            resetBit:= uint32(0x000000001) << 3
+            SR.Set((SR.Get() & ^resetBit) | bit)
 	    }
 
 	    func (SR *StatusRegister) Get_OV() bool {
-		ZN :=  (SR.Get() >> 3) & uint32(0x00000001)
-		return ZN == uint32(0x00000001)
+            ZN :=  (SR.Get() >> 3) & uint32(0x00000001)
+            return ZN == uint32(0x00000001)
 	    }
 
 	// IV (invalid instruction): Invalid operation code
 	    func (SR *StatusRegister) IV(set bool) {
-		bit :=  convertBool(set) << 2
-		resetBit:= uint32(0x000000001) << 2
-		SR.Set((SR.Get() & ^resetBit) | bit)
+            bit :=  convertBool(set) << 2
+            resetBit:= uint32(0x000000001) << 2
+            SR.Set((SR.Get() & ^resetBit) | bit)
 	    }
 
 	    func (SR *StatusRegister) Get_IV() bool {
-		ZN :=  (SR.Get() >> 2) & uint32(0x00000001)
-		return ZN == uint32(0x00000001)
+            ZN :=  (SR.Get() >> 2) & uint32(0x00000001)
+            return ZN == uint32(0x00000001)
 	    }
 
 	// IE (interruption control): 
 	// Not affect unmaskable instruction
 	    func (SR *StatusRegister) IE(set bool) {
-		bit :=  convertBool(set) << 1
-		resetBit:= uint32(0x000000001) << 1
-		SR.Set((SR.Get() & ^resetBit) | bit)
+            bit :=  convertBool(set) << 1
+            resetBit:= uint32(0x000000001) << 1
+            SR.Set((SR.Get() & ^resetBit) | bit)
 	    }
 
 	    func (SR *StatusRegister) Get_IE() bool {
-		ZN :=  (SR.Get() >> 1) & uint32(0x00000001)
-		return ZN == uint32(0x00000001)
+            ZN :=  (SR.Get() >> 1) & uint32(0x00000001)
+            return ZN == uint32(0x00000001)
 	    }
 
 	// CY (carry): goes to an arithmetic
 	    func (SR *StatusRegister) CY(set bool) {
-		bit :=  convertBool(set) << 0
-		resetBit:= uint32(0x000000001) << 0
-		SR.Set((SR.Get() & ^resetBit) | bit)
+            bit :=  convertBool(set) << 0
+            resetBit:= uint32(0x000000001) << 0
+            SR.Set((SR.Get() & ^resetBit) | bit)
 	    }
 
 	    func (SR *StatusRegister) Get_CY() bool {
-		ZN :=  (SR.Get() >> 0) & uint32(0x00000001)
-		return ZN == uint32(0x00000001)
+            ZN :=  (SR.Get() >> 0) & uint32(0x00000001)
+            return ZN == uint32(0x00000001)
 	    }
     // }}} 
 
@@ -411,21 +672,21 @@ type ExecutableFormatSubRoutine interface {
 	}
 	// Operation Code (OP): code indentify for instructions
 	    func (IR InstructionRegister) Opcode() uint8 {
-		return uint8((IR.Get() & OP) >> DeslocOP)
+            return uint8((IR.Get() & OP) >> DeslocOP)
 	    }
 
 	// Sub Operation Code (SubCode): sub code indentify for instructions with ID nested
 	    func (IR InstructionRegister) SubCode() uint8 {
-		return uint8((IR.Get() & SubCode) >> DeslocSubCode)
+            return uint8((IR.Get() & SubCode) >> DeslocSubCode)
 	    }
 
 	// Load instruction of memory in address PC for IR
 	    func (IR *InstructionRegister) Load() {
-		IR.data = Load32(PC.data / 4)
+            IR.data = Load32(PC.data / 4)
 	    }
 	//  Return when current instruction is an NOP
 	    func (IR *InstructionRegister) NOP() bool {
-		return IR.data == 0
+            return IR.data == 0
 	    }
     // }}} 
 
@@ -437,6 +698,7 @@ type InstructionCollection struct {
 
 func (collection *InstructionCollection) New() {
     collection.data = make(map[uint16]Executable)
+    collection.Setup()
 }
 
 func (collection *InstructionCollection) Setup() {
@@ -494,13 +756,13 @@ func (collection *InstructionCollection) Setup() {
     collection.data[uint16(63)] = &Int{}
 }
 
-// FIX: case when não existts instructiion
+// FIX: when not exists instructiion
 func (collection *InstructionCollection) Get() Executable {
     opcode := uint16(IR.Opcode())
     subcode := uint16(IR.SubCode())
 
     if opcode != uint16(4) {
-	return  collection.data[opcode]
+        return  collection.data[opcode]
     }
 
     return collection.data[opcode * 300 + subcode]
@@ -508,11 +770,16 @@ func (collection *InstructionCollection) Get() Executable {
 
 type InterruptionControl struct {
     InterruptionVector map[string]map[string]interface{}
+    
+    Current_interruption Interruption
 
     ZD_channel  chan struct{}
     IV_channel  chan struct{}
     GI_channel  chan struct{}
     HW1_channel chan struct{}
+    HW2_channel chan struct{}
+    HW3_channel chan struct{}
+    HW4_channel chan struct{}
 }
 
 func (ic *InterruptionControl) New()  {
@@ -555,6 +822,30 @@ func (ic *InterruptionControl) New()  {
             "channel": &ic.HW1_channel,
             "ISR": &HardwareInterruption1{},
         },
+        "Hardware Interruption 2": {
+            "id": "HARDWARE INTERRUPTION 2",
+            "address": uint32(0x00000010),
+            "maskable": true,
+            "priority": 2,
+            "channel": &ic.HW2_channel,
+            "ISR": &HardwareInterruption2{},
+        },
+        "Hardware Interruption 3": {
+            "id": "HARDWARE INTERRUPTION 3",
+            "address": uint32(0x00000018),
+            "maskable": true,
+            "priority": 3,
+            "channel": &ic.HW3_channel,
+            "ISR": &HardwareInterruption3{},
+        },
+        "Hardware Interruption 4": {
+            "id": "HARDWARE INTERRUPTION 4",
+            "address": uint32(0x0000001C),
+            "maskable": true,
+            "priority": 4,
+            "channel": &ic.HW4_channel,
+            "ISR": &HardwareInterruption4{},
+        },
     }
     ic.Setup_events()
 }
@@ -564,11 +855,17 @@ func (ic *InterruptionControl) Setup_events()  {
     ic.IV_channel = make(chan struct{})
     ic.GI_channel = make(chan struct{})
     ic.HW1_channel = make(chan struct{})
+    ic.HW2_channel = make(chan struct{})
+    ic.HW3_channel = make(chan struct{})
+    ic.HW4_channel = make(chan struct{})
     
     go ic.Handle_ZD()
     go ic.Handle_IV()
     go ic.Handle_GI()
     go ic.Handle_HW1()
+    go ic.Handle_HW2()
+    go ic.Handle_HW3()
+    go ic.Handle_HW4()
     // Generate Handles with function generic
 }
 
@@ -587,10 +884,7 @@ func (ic *InterruptionControl) execute()  {
 
         if !maskable || maskable && SR.Get_IE() {
             ic.Save_context()
-            isr := interruption["ISR"].(Interruption)
-
-            isr.New()
-            isr.Execute()
+            ic.Current_interruption.Execute()
         }
     }
 }
@@ -619,7 +913,7 @@ func (ic *InterruptionControl) Emit_Event(id string) {
 
     channel := interruption["channel"].(*chan struct{})
     
-    WG.Add(1)
+    WG.Add(2)
 
     *channel <- struct{}{}
 }
@@ -627,6 +921,12 @@ func (ic *InterruptionControl) Emit_Event(id string) {
 func (ic *InterruptionControl) Handle_ZD() {
     for {
         <- ic.ZD_channel
+
+        ic.Current_interruption = &ZeroDivision{}
+
+        ic.Current_interruption.New()
+
+        WG.Done()
         
         EVENT <- "Zero Division"
 
@@ -638,6 +938,12 @@ func (ic *InterruptionControl) Handle_IV() {
     for {
         <- ic.IV_channel
         
+        ic.Current_interruption = &InvalidInstruction{}
+
+        ic.Current_interruption.New()
+
+        WG.Done()
+
         EVENT <- "Invalid Instruction"
 
         WG.Done()
@@ -647,6 +953,12 @@ func (ic *InterruptionControl) Handle_IV() {
 func (ic *InterruptionControl) Handle_GI() {
     for {
         <- ic.GI_channel
+
+        ic.Current_interruption = &GeneralInterruption{}
+        
+        ic.Current_interruption.New()
+
+        WG.Done()
 
         EVENT <- "General Interruption"
 
@@ -658,12 +970,65 @@ func (ic *InterruptionControl) Handle_HW1() {
     for {
         <- ic.HW1_channel
         
+        ic.Current_interruption = &HardwareInterruption1{}
+
+        ic.Current_interruption.New()
+
+        WG.Done()
+
         EVENT <- "Hardware Interruption 1"
 
         WG.Done()
     }
 }
 
+func (ic *InterruptionControl) Handle_HW2() {
+    for {
+        <- ic.HW2_channel
+        
+        ic.Current_interruption = &HardwareInterruption2{}
+
+        ic.Current_interruption.New()
+
+        WG.Done()
+
+        EVENT <- "Hardware Interruption 2"
+
+        WG.Done()
+    }
+}
+
+func (ic *InterruptionControl) Handle_HW3() {
+    for {
+        <- ic.HW3_channel
+        
+        ic.Current_interruption = &HardwareInterruption3{}
+
+        ic.Current_interruption.New()
+
+        WG.Done()
+
+        EVENT <- "Hardware Interruption 3"
+
+        WG.Done()
+    }
+}
+
+func (ic *InterruptionControl) Handle_HW4() {
+    for {
+        <- ic.HW4_channel
+        
+        ic.Current_interruption = &HardwareInterruption4{}
+
+        ic.Current_interruption.New()
+
+        WG.Done()
+
+        EVENT <- "Hardware Interruption 4"
+
+        WG.Done()
+    }
+}
 type Interruption interface {
     New()
     Execute()
@@ -694,7 +1059,7 @@ type InvalidInstruction struct { ISR }
 func (gi *InvalidInstruction) New()  {
     gi.pc = 0x00000004
     gi.cr = uint32(IR.Opcode())
-    gi.ipc = PC.data - 4
+    gi.ipc = PC.data
 }
 
 type GeneralInterruption struct { ISR }
@@ -702,7 +1067,7 @@ type GeneralInterruption struct { ISR }
 func (gi *GeneralInterruption) New()  {
     gi.pc = 0x0000000C
     gi.cr = Int{}.I16()
-    gi.ipc = PC.data - 4
+    gi.ipc = PC.data
 }
 
 type HardwareInterruption1 struct { ISR }
@@ -711,6 +1076,30 @@ func (hw1 *HardwareInterruption1) New()  {
     hw1.pc = 0x00000010
     hw1.cr = 0xE1AC04DA
     hw1.ipc = PC.data
+}
+
+type HardwareInterruption2 struct { ISR }
+
+func (hw2 *HardwareInterruption2) New()  {
+    hw2.pc = 0x00000014
+    hw2.cr = 0x01EEE754
+    hw2.ipc = PC.data
+}
+
+type HardwareInterruption3 struct { ISR }
+
+func (hw3 *HardwareInterruption3) New()  {
+    hw3.pc = 0x00000018
+    hw3.cr = 0x01EEE754
+    hw3.ipc = PC.data
+}
+
+type HardwareInterruption4 struct { ISR }
+
+func (hw4 *HardwareInterruption4) New()  {
+    hw4.pc = 0x0000001C
+    hw4.cr = 0x01EEE754
+    hw4.ipc = PC.data
 }
 // {{{ Intructions
 
@@ -2357,6 +2746,7 @@ func (int *Int) Execute() {
 
     int.NAD = 0x0000000C
     IC.Emit_Event("General Interruption")
+    WG.Wait()
 }
 
 func (int *Int) Shutdown() bool {
@@ -2400,6 +2790,11 @@ func Store8(address uint32, Data uint8) {
         MEM_WATCHDOG[address - WATCHDOG] = Data
         return
     }
+    
+    if address >= FPU_X && address < FPU_CONTROL + 4 {
+        MEM_FPU[address - FPU_X] = Data
+        return
+    }
 
     MEM[address] = Data
 }
@@ -2424,6 +2819,10 @@ func Load8(address uint32) (Data uint8){
         return MEM_WATCHDOG[address - WATCHDOG]
     }
     
+    if address >= FPU_X && address < FPU_CONTROL + 4 {
+        return MEM_FPU[address - FPU_X]
+    }
+
     return MEM[address]
 }
 
@@ -2447,7 +2846,6 @@ func NewRegister(args varArgs) Registers {
         case "PC":		         register = &ProgramCounter{Register: register_base}
         case "IPC":		         register = &InterruptionProgramCounter{Register: register_base}
         case "CR":		         register = &ClaimRegister{Register: register_base}
-        case "WD":		         register = &WatchDogRegister{MemRegister: MemRegister{Register: register_base} }
     }
     
     return register
@@ -2499,7 +2897,6 @@ func Setup_mem_register() {
 
 func Start_interruption_control()  {
     IC = &InterruptionControl{}
-    IC.New()
 }
 
 // Store in memory full instruction of file
@@ -2543,32 +2940,30 @@ func main() {
     setup_IO()
     Setup_registers()
     Setup_mem_register()
-    Start_interruption_control()
     read_instructions(os.Stdin)
 
     INSTRUCTION.New()
-    INSTRUCTION.Setup()
+    FPU.New()
+    IC.New()
 
     fmt.Println("[START OF SIMULATION]");
 
-
     R[0].Set(0)
 
-    
     for {
         WD.Count()
         IC.execute()
+        FPU.Execute()
         IR.Load()
 
-        if IR.NOP() {
-            continue
-        }
+        if IR.NOP() { continue }
 
         executable := INSTRUCTION.Get()
 
         if executable == nil {
             SR.IV(true)
             IC.Emit_Event("Invalid Instruction")
+            WG.Wait()
             fmt.Printf("[INVALID INSTRUCTION @ 0x%08X]\n", IR.Opcode())
         } else {
             executable.New()
@@ -2581,12 +2976,9 @@ func main() {
 
             executable.Print()
 
-
             executableInt, ok := executable.(*Int)
 
-            if ok && executableInt.Shutdown() {
-                break
-            }
+            if ok && executableInt.Shutdown() { break }
 
             executableFormatS, ok := executable.(ExecutableFormatSubRoutine)
 
