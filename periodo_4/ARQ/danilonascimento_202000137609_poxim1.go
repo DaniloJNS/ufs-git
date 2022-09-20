@@ -8,6 +8,7 @@ import (
 	"math"
 	"math/bits"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 )
@@ -16,6 +17,7 @@ var (
     MEM          *[32768]uint8 = new([32768]uint8) // Memory with 32KB
     MEM_FPU      *[16]uint8    = new([16]uint8)    // Memory mapping for FPU
     MEM_WATCHDOG *[16]uint8    = new([16]uint8)    // Memory mapping for WATCHDOG
+    MEM_TERMINAL *[4]uint8    = new([4]uint8)    // Memory mapping for WATCHDOG
 
     R *[32]Registers = new([32]Registers) // 32 registers  with 32 bits
 
@@ -118,6 +120,8 @@ var (
     EVENT = make(chan string, 1)
 
     WG sync.WaitGroup
+    
+    TERM * Terminal = &Terminal{}
 
     STATUS uint32
 )
@@ -148,7 +152,9 @@ const (
      FPU_Y         = uint32(0x80808884)
      FPU_Z         = uint32(0x80808888)
      FPU_CONTROL   = uint32(0x8080888C)
-     TERMINAL      = uint32(0x80808888)
+     TERMINAL      = uint32(0x88888888)
+     TERMINAL_IN   = uint32(0x8888888A)
+     TERMINAL_OUT  = uint32(0x8888888B)
 
      DeslocOP      = uint32(26)
      DeslocSubCode = uint32(8)
@@ -158,6 +164,16 @@ const (
      DeslocV       = uint32(6)
 )
 
+type Terminal struct {
+    MemRegister
+    input string
+}
+
+func (terminal *Terminal) Get(data uint8) {
+    terminal.input = fmt.Sprintf("%s%s", terminal.input, string(data))
+}
+
+//  Entity to represent the FPU processing module
 type Fpu struct {
     RX, RY, RZ MemRegister
     RC ControlFpuMemRegister
@@ -186,6 +202,10 @@ func (fpu *Fpu) New() {
 
 func (fpu *Fpu) Setup_operations() {
     fpu.operations = map[uint16]Operation {
+        0: {
+            run: fpu.InvalidInstruction,
+            multiple_cycles: false,
+        },
         1: {
             run: fpu.Add,
             multiple_cycles: true,
@@ -224,11 +244,14 @@ func (fpu *Fpu) Setup_operations() {
         },
     }
 }
-
-func (fpu *Fpu) Load_operation() Operation {
+// load the operation for processing, case not exists retun an invalid operation
+func (fpu *Fpu) Load_operation() (operation Operation) {
    code_operation := fpu.RC.Operation()
+   operation = fpu.operations[uint16(code_operation)]
    
-   return fpu.operations[uint16(code_operation)]
+   if reflect.ValueOf(operation).IsZero() { operation = fpu.operations[uint16(0)] }
+
+   return 
 }
 
 func (fpu *Fpu) calculates_exp(value float32) int32{
@@ -238,17 +261,12 @@ func (fpu *Fpu) calculates_exp(value float32) int32{
 func (fpu *Fpu) calculates_cycles() {
    status := fpu.current_operation.multiple_cycles
 
-   if status {
+   if status { // |exp(x) - exp(y)|
        exp_x := fpu.calculates_exp(fpu.Get_X())
-    //    fmt.Println("exp_x = ", exp_x)
        exp_y := fpu.calculates_exp(fpu.Get_Y())
-    //    fmt.Println("exp_y = ", exp_y)
 
-    //    fmt.Println("sub = ", int32(exp_x - exp_y))
        abs := math.Abs(float64(exp_x - exp_y))
-    //    fmt.Println("abs = ", abs)
        fpu.cycles = uint32(abs)
-    //    fmt.Println("cycles = ", fpu.cycles)
    } else {
        fpu.cycles = 0
    }
@@ -257,31 +275,26 @@ func (fpu *Fpu) calculates_cycles() {
 func (fpu *Fpu) Get_X() float32 {
     MEM_X_FLOAT_32_BITS := math.Float32frombits(fpu.RX.Get())
 
-    if MEM_X_FLOAT_32_BITS == fpu.X {
-        return fpu.X
-    } else {
-        return float32(fpu.RX.Get())
-    }
+    if MEM_X_FLOAT_32_BITS == fpu.X { return fpu.X } 
+
+    return float32(fpu.RX.Get())
 }
 
 func (fpu *Fpu) Get_Y() float32 {
     MEM_Y_FLOAT_32_BITS := math.Float32frombits(fpu.RY.Get())
 
-    if MEM_Y_FLOAT_32_BITS == fpu.Y {
-        return fpu.Y
-    } else {
-        return float32(fpu.RY.Get())
-    }
+    if MEM_Y_FLOAT_32_BITS == fpu.Y { return fpu.Y } 
+
+    return float32(fpu.RY.Get())
 }
 
 func (fpu *Fpu) Get_Z() float32 {
     MEM_Z_FLOAT_32_BITS := math.Float32frombits(fpu.RZ.Get())
 
-    if MEM_Z_FLOAT_32_BITS == fpu.Z {
-        return fpu.Z
-    } else {
-        return float32(fpu.RZ.Get())
-    }
+    if MEM_Z_FLOAT_32_BITS == fpu.Z { return fpu.Z } 
+
+   return float32(fpu.RZ.Get())
+    
 }
 
 func (fpu *Fpu) Set_X(x float32) {
@@ -300,8 +313,7 @@ func (fpu *Fpu) Set_Z(z float32) {
 }
 
 func (fpu *Fpu) Reset() {
-    fpu.RC.SetStatus(false)
-    fpu.RC.ResetOperation()
+    fpu.RC.ResetRegister()
     fpu.enable= false
     fpu.cycles = 0
     fpu.current_operation = Operation{}
@@ -309,19 +321,9 @@ func (fpu *Fpu) Reset() {
 
 func (fpu *Fpu) Execute() {
     if fpu.RC.Operation() == 0 { return }
-    
+
     if !fpu.enable {
-       fpu.enable = true
-       
-       fpu.current_operation = fpu.Load_operation()
-       
-       if fpu.current_operation.run == nil { 
-           fpu.raise_invalid_instruction() 
-           
-           return
-        }
-       
-       fpu.calculates_cycles()
+        fpu.Start_processing()
     } else {
        fpu.cycles--
     }
@@ -329,25 +331,33 @@ func (fpu *Fpu) Execute() {
     if fpu.cycles == 0 {
        fpu.current_operation.run()
 
-       if fpu.RC.Status() == 1 {
-           IC.Emit_Event("Hardware Interruption 2")
-       } else if fpu.current_operation.multiple_cycles {
-           IC.Emit_Event("Hardware Interruption 3")
-       } else {
-           IC.Emit_Event("Hardware Interruption 4")
-       }
-       
+       fpu.Request_interruption()
+
        fpu.Reset()
 
        WG.Wait()
     }
 }
 
-func (fpu *Fpu) raise_invalid_instruction() {
-    fpu.RC.SetStatus(true)
+func (fpu *Fpu) Request_interruption() {
+   if fpu.RC.Status() == 1 {
+       IC.Emit_Event("Hardware Interruption 2")
+   } else if fpu.current_operation.multiple_cycles {
+       IC.Emit_Event("Hardware Interruption 3")
+   } else {
+       IC.Emit_Event("Hardware Interruption 4")
+   }
+}
 
-    IC.Emit_Event("Hardware Interruption 2")
-    WG.Wait()
+func (fpu *Fpu) Start_processing() {
+    fpu.enable = true // indicates which is processing
+    fpu.RC.SetStatus(false) // define status to ready
+    fpu.current_operation = fpu.Load_operation()
+    fpu.calculates_cycles() // calculates numbers of cycles to finish
+}
+
+func (fpu *Fpu) InvalidInstruction() {
+    fpu.RC.SetStatus(true)
 }
 
 func (fpu *Fpu) Add() {
@@ -461,7 +471,6 @@ type ExecutableFormatSubRoutine interface {
 	func (register *ReadOnlyRegister) Set(val uint32) {}
     
     // Mem Registers has your data store in memory
-    // Mem Registers has your data store in memory
     type MemRegister struct {
         base_adress uint32 // data address in memory
     }
@@ -487,8 +496,8 @@ type ExecutableFormatSubRoutine interface {
         return uint8(register.Get() & 0x0000001F)
 	}
 
-	func (register *ControlFpuMemRegister) ResetOperation() {
-        register.Set(register.Get() & 0xFFFFFFE0)
+	func (register *ControlFpuMemRegister) ResetRegister() {
+        register.Set(register.Get() & 0x00000020)
 	}
     
 	func (register *ControlFpuMemRegister) Status() uint8 {
@@ -2795,6 +2804,11 @@ func Store8(address uint32, Data uint8) {
         MEM_FPU[address - FPU_X] = Data
         return
     }
+    
+    if address == TERMINAL_OUT {
+        TERM.Get(Data)    
+        return
+    }
 
     MEM[address] = Data
 }
@@ -2950,7 +2964,7 @@ func main() {
 
     R[0].Set(0)
 
-    for {
+    for i:= 0; i < 4000; i++ {
         WD.Count()
         IC.execute()
         FPU.Execute()
@@ -2992,6 +3006,10 @@ func main() {
 
         PC.data += 4
     }
+    
+    fmt.Println("[TERMINAL]")
+    
+    fmt.Printf("%s\n", TERM.input)
 
     fmt.Printf("[END OF SIMULATION]");
 }
