@@ -25,42 +25,47 @@
         pop r3, r2  
         // Retorno da funcao
         ret
+    convert_decimal:
+        modi r5, r3, 10
+        divi r3, r3, 10
+        ret
+    print_digit:
+        push r5, r3
+        call convert_decimal
+        addi r4, r4, 1
+        cmpi r4, 10
+        beq 1
+        call print_digit
+        addi r5, r5, 48
+        s8 [r1], r5
+        pop r3, r5
+        ret
+
     print_number:
         // salvando registradores
-        push r3, r4
+        push r3, r4, r5
         // inicializa contador com zero
         mov r4, 0
         // Leitura de byte da mensagem
-        // R1 = endereco do terminal
+        // R1 = Endereco do terminal
         l32 r1, [terminal]
-        // Comparando com '3'
-        cmpi r4, 4
-        // Finalizando r3 é iqual 3
-        beq 6
         // ler byte para imprimir
-        l8 r3, [r2]
-        // ascii conversão
-        addi r3, r3, 48
-        // Escreve no terminal
-        s8 [r1], r3
-        // Incrementa o ponteiro da mensagem
-        addi r2, r2, 1
-        // Incrementa o contador
-        addi r4, r4, 1
-        // Repete a iteracao
-        bun -8
+        l32 r3, [r2]
+        // Comparando com '3'
+        call print_digit
         // carrega contexto
-        pop r4, r3
+        pop r5, r4, r3
         // Retorno da funcao
         ret
     exibir_vetor:
         push r4, r3, r2
         // ponteiro do vetor
         mov r4, V1
+        divi r4, r4, 4
         // Inicializando contador
         mov r3, 0
         // inicar interação
-        cmpi r3, 4
+        cmp r3, r5
         beq 7
         // R2 = ponteiro do vetor
         addi r2, r4, 0
@@ -73,7 +78,7 @@
         // Incremento contador
         addi r3, r3, 1
         // Incremento ponteiro
-        addi r4, r4, 4
+        addi r4, r4, 1
         // reiniciar loop
         bun -9
         // R2 = ponteiro da string
@@ -132,6 +137,7 @@
     main:
         // SP = 32 KiB
         mov sp, 0x7FFC
+        mov r5, 7
         // R2 = ponteiro da string
         mov r2, input_message
         // printf
@@ -143,7 +149,6 @@
         // printf
         call printf
         
-        mov r5, 7
         call ordena
         // exibit todos os valores do vetor
         call exibir_vetor
@@ -162,7 +167,7 @@
         .asciz "\n"
     // Inicializando array
     V1:
-        .4byte 4, 9, 1, 41, 2, 11, 5
+        .4byte 4, 9, 1, 3, 2, 5, 7
     // Endereco do dispositivo (OUT)
     terminal:
         .4byte 0x8888888B
