@@ -30,15 +30,20 @@
         divi r3, r3, 10
         ret
     print_digit:
-        push r5, r3
+        push r6, r5, r3
         call convert_decimal
         addi r4, r4, 1
         cmpi r4, 10
         beq 1
         call print_digit
+        cmpi r3, 0
+        bgt 3
+        or r6, r3, r5
+        cmpi r6, 0
+        beq 2
         addi r5, r5, 48
         s8 [r1], r5
-        pop r3, r5
+        pop r3, r5, r6
         ret
 
     print_number:
