@@ -60,7 +60,7 @@
         // Inicializando contador
         mov r3, 0
         // inicar interação
-        cmpi r3, 3
+        cmpi r3, 4
         beq 7
         // R2 = ponteiro do vetor
         addi r2, r4, 0
@@ -85,13 +85,14 @@
         // Retorno da funcao
         ret
     substitui:
-        push r3, r4, r6, r7
-        // Ponteiro do vetor
+        push r5, r3, r4, r6, r7
+        // Pon5eir5 do vetor
         mov r4, V1
         divi r4, r4, 4
         // Inicializa contador
+        subi r5, r5, 1
         mov r3, 0
-        cmpi r3, 2
+        cmp r3, r5
         beq 11
         
         // r6 = v[j] ; r7 = v[j + 1]
@@ -109,14 +110,14 @@
         addi r3, r3, 1
         bun -13
 
-        pop r7, r6, r4 , r3
+        pop r7, r6, r4, r3, r5
 
         ret
     ordena:
         push r3
 
         mov r3, 0
-        cmpi r3, 3
+        cmp r3, r5
         beq 3
 
         call substitui
@@ -142,6 +143,7 @@
         // printf
         call printf
         
+        mov r5, 7
         call ordena
         // exibit todos os valores do vetor
         call exibir_vetor
@@ -160,7 +162,7 @@
         .asciz "\n"
     // Inicializando array
     V1:
-        .4byte 4, 9, 1
+        .4byte 4, 9, 1, 41, 2, 11, 5
     // Endereco do dispositivo (OUT)
     terminal:
         .4byte 0x8888888B
