@@ -30,36 +30,48 @@
         divi r3, r3, 10
         ret
     print_digit:
-        push r6, r5, r3
+        push sr, r6, r5, r3
+        // r5 - Digito atual a ser exigibido
+        // r3 - valor não convertido que ainda deve ser exibido
+
+        // rotina para compara converção para decimal (0-9)
         call convert_decimal
-        addi r4, r4, 1
-        cmpi r4, 10
+        // comparação para verificar se tem digitos a esquerda
+        // para exibir
+        cmp r3, r0
+        // se não existir mais digitos a esquerda para exibir
+        // interronpe a recursão
         beq 1
         call print_digit
-        cmpi r3, 0
-        bgt 3
-        or r6, r3, r5
-        cmpi r6, 0
+        // caso existam digitos a esquerda para exibit
+        // pula a comparação "se o digito atual é zero"
+        bgt 2
+        // esse comparação acontece quando não exitem mais digitos
+        // a esquerda para exibir, caso digito atual for zero
+        // ele não será exibido
+        cmp r5, r0
+        // pula a exibição se digito atual for zero
         beq 2
+        // converter o digito atual para ascii
         addi r5, r5, 48
+        // imprimir
         s8 [r1], r5
-        pop r3, r5, r6
+        pop r3, r5, r6, sr
         ret
 
     print_number:
         // salvando registradores
-        push r3, r4, r5
-        // inicializa contador com zero
-        mov r4, 0
-        // Leitura de byte da mensagem
+        // r1 - ponteiro para o terminal
+        // r2 - ponteiro da posição atual do vetor
+        push r3, r5
         // R1 = Endereco do terminal
         l32 r1, [terminal]
         // ler byte para imprimir
         l32 r3, [r2]
-        // Comparando com '3'
+        // rotina para exibir os digitos
         call print_digit
         // carrega contexto
-        pop r5, r4, r3
+        pop r5, r3
         // Retorno da funcao
         ret
     exibir_vetor:
@@ -96,13 +108,21 @@
         ret
     substitui:
         push r5, r3, r4, r6, r7
+        // r4 - ponteiro do vetor = j
+        // r5 - tamanho do vetor
+        // r6 - v[j]
+        // r7 - v[j + 1]
+        // r3 - contador do loop
         // Pon5eir5 do vetor
         mov r4, V1
         divi r4, r4, 4
         // Inicializa contador
         subi r5, r5, 1
         mov r3, 0
+        // compara se valor atual do contador é igual ao tamanho do vetor
         cmp r3, r5
+        // interrnpe o loop se valor atual do contador é igual ao tamanho
+        // do vetor
         beq 11
         
         // r6 = v[j] ; r7 = v[j + 1]
@@ -116,25 +136,34 @@
         s32 [r4], r7
         addi r4, r4, 1
         s32 [r4], r6
-
+        // incremento do contador
         addi r3, r3, 1
+        // reiniciar a recursão
         bun -13
 
         pop r7, r6, r4, r3, r5
 
         ret
     ordena:
+        // salva na pilha o valor atual de r3
         push r3
+        // r3 - contador
+        // r5 - tamanho do vetor
 
+        // inicializar contador
         mov r3, 0
+        // compara o valor atual do contador com tamanho do vetor
         cmp r3, r5
+        // interronpe o loop se valor do contador é igual ao tamanho do
+        // vetor
         beq 3
-
+        // rotina de substuição de valores
         call substitui
-
+        // incremento do contador
         addi r3, r3, 1
+        // reiniciar o loop
         bun -5
-        
+        // retoma o valor anterior de r3
         pop r3
 
         ret
