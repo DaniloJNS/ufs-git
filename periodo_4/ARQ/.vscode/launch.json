@@ -12,7 +12,7 @@
             "mode": "debug",
             "program": "${file}",
             "env": {},
-            "args": ["${workspaceFolder}/fpu/2_fpu.hex", "1_project.out"],
+            "args": ["${workspaceFolder}/1_project.hex", "1_project.out"],
             "showLog": true
         },
         {
