@@ -103,42 +103,68 @@
         pop r2, r3, r4
         // Retorno da funcao
         ret
+        
+    insertion:
+        mov r4, V1
+        divi r4, r4, 4
+        ret
+
     substitui:
-        push r5, r3, r4, r6, r7
+        push r1, r2, r3, r4, r5
+        push r6, r7, r8, r9
         // r4 - ponteiro do vetor = j
         // r5 - tamanho do vetor
         // r6 - v[j]
         // r7 - v[j + 1]
-        // r3 - contador do loop
+        // r3 - contador do loop i 
+        // r2 - contador do loop j
         // Pon5eir5 do vetor
-        mov r4, V1
-        divi r4, r4, 4
-        // Inicializa contador
-        subi r5, r5, 1
-        mov r3, 0
+        call insertion
+
+        mov r3, 1
         // compara se valor atual do contador é igual ao tamanho do vetor
         cmp r3, r5
+        beq 18
         // interrnpe o loop se valor atual do contador é igual ao tamanho
         // do vetor
-        beq 11
+        // {{ key = arr[i];
+            add r7, r4, r3
+            l32 r6, [r7]
+        // }}
+        // j = i - 1
+        subi r2, r3, 1
+        // j >= 0
+        cmpi r2, -1
+        // devia se for falso
+        beq 8
+
+        // {{ r8 = arr[j]
+            add r7, r4, r2
+            addi r9, r7, 1
+            l32 r8, [r7]
+        // }}
+        cmp r8, r6
+        // arr[j + 1] = arr[j]
+        // desvia ser for falso
+        bbe 3
+        // arr[j + 1] = arr[j]
+        s32 [r9], r8
+        // decremetno do contador
+        subi r2, r2, 1
+        bun -10
+
+        // {{ arr[j+1] = key
+            add r7, r4, r2
+            addi r9, r7, 1
+            s32 [r9], r6
+        // }}
         
-        // r6 = v[j] ; r7 = v[j + 1]
-        l32 r6, [r4]
-        addi r4, r4, 1
-        l32 r7, [r4]
-        // r6 > r7 ? r6, r7 = r7, r6 : null
-        cmp r6 ,r7
-        blt 4
-        subi r4, r4, 1
-        s32 [r4], r7
-        addi r4, r4, 1
-        s32 [r4], r6
-        // incremento do contador
         addi r3, r3, 1
         // reiniciar a recursão
-        bun -13
+        bun -20
 
-        pop r7, r6, r4, r3, r5
+        pop r9, r8, r7, r6
+        pop r5, r4, r3, r2, r1
 
         ret
     ordena:
@@ -202,7 +228,6 @@
         mov r5, 7
         // R2 = ponteiro da string
         mov r2, input_message
-        // printf
         call printf
         // ler entrada do terminal
         call ler_entrada
@@ -231,7 +256,7 @@
         .asciz "\n"
     // Inicializando array
     V1:
-        .fill 100, 4, 1
+        .fill 7, 4, 1
     // Endereco do dispositivo (OUT)
     terminal_in:
         .4byte 0x8888888A
