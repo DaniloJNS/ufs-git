@@ -68,3 +68,6 @@ fs.writeFile('resultado.txt', 'Hello World!', function(err) {
 }); // escreve o dados processados no arquivo resultado.txt
 
 console.log(resultado)
+
+[1, 2, 3]?.reduce((relationships) =>  (relationship) => { if (relationship.name === relationship_code) relationship.description[0] || "-" }, [])
+

@@ -2987,4 +2987,3 @@ func main() {
     fmt.Printf("%s\n", TERM.input)
 
     fmt.Printf("[END OF SIMULATION]");
-}

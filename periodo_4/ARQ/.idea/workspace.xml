@@ -5,16 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="ce75a70d-00dc-4569-8530-ccde14cb1b25" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/1_project.hex" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/1_project.out" beforeDir="false" afterPath="$PROJECT_DIR$/1_project.out" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../POO/unidade_1/project/clock/DoisDigitos.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../POO/unidade_1/project/clock/DoisDigitos.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../POO/unidade_1/project/clock/Main.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../POO/unidade_1/project/clock/RelogioDigital.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../POO/unidade_1/project/clock/RelogioDigital.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../POO/unidade_1/project/clock/main.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../POO/unidade_1/project/clock/main.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/danilonascimento_202000137609_poxim1.go" beforeDir="false" afterPath="$PROJECT_DIR$/danilonascimento_202000137609_poxim1.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -104,6 +96,7 @@
       <workItem from="1661453364228" duration="38000" />
       <workItem from="1661455464403" duration="116000" />
       <workItem from="1661656306255" duration="40000" />
+      <workItem from="1661771196083" duration="19000" />
     </task>
     <servers />
   </component>
