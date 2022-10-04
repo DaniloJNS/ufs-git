@@ -2984,6 +2984,7 @@ func main() {
     
     fmt.Println("[TERMINAL]")
     
-    fmt.Printf("%s\n", TERM.input)
+    fmt.Printf("%s", TERM.input)
 
     fmt.Printf("[END OF SIMULATION]");
+}

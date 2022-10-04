@@ -120,12 +120,6 @@
         // r2 - contador do loop j
         // Pon5eir5 do vetor
         call insertion
-
-        mov r3, 1
-        // compara se valor atual do contador é igual ao tamanho do vetor
-        cmp r3, r5
-        beq 18
-        // interrnpe o loop se valor atual do contador é igual ao tamanho
         // do vetor
         // {{ key = arr[i];
             add r7, r4, r3
@@ -158,11 +152,6 @@
             addi r9, r7, 1
             s32 [r9], r6
         // }}
-        
-        addi r3, r3, 1
-        // reiniciar a recursão
-        bun -20
-
         pop r9, r8, r7, r6
         pop r5, r4, r3, r2, r1
 
@@ -174,12 +163,12 @@
         // r5 - tamanho do vetor
 
         // inicializar contador
-        mov r3, 0
+        mov r3, 1
         // compara o valor atual do contador com tamanho do vetor
         cmp r3, r5
         // interronpe o loop se valor do contador é igual ao tamanho do
         // vetor
-        beq 3
+        bgt 3
         // rotina de substuição de valores
         call substitui
         // Incrementa contador
